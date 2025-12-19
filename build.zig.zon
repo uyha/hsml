@@ -1,5 +1,5 @@
 .{
-    .name = .hsm,
+    .name = .hsml,
     .version = "0.0.1",
     .minimum_zig_version = "0.15.2",
     .paths = .{
@@ -7,5 +7,5 @@
         "build.zig.zon",
         "src/",
     },
-    .fingerprint = 0x8e94745a6cc1176d,
+    .fingerprint = 0x1d36ee60650be06d,
 }

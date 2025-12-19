@@ -1,0 +1,30 @@
+simple: {
+  resources: {
+    motor: *Motor,
+    road: *const road,
+  },
+
+  states: {running, pausing, accelerating},
+
+  events: {red, yellow, green, speed},
+
+  guards: {
+    has_pedestrian(self.road),
+  },
+
+  actions: {
+    harsh_stop(self.motor),
+    soft_stop(self.motor),
+    accelerate(self.motor),
+  },
+
+  transitions: {
+   *pausing + green[not has_pedestrian] / accelerate = accelerating,
+
+    running + red / harsh_stop = pausing,
+            + yellow / soft_stop = pausing,
+            + green[has_pedestrian] / harsh_stop = pausing,
+
+    accelerating + speed[stable_speed] = running,
+  },
+}
