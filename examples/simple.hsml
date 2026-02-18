@@ -19,12 +19,12 @@ simple: {
   },
 
   transitions: {
-   *pausing + green[not has_pedestrian] / accelerate = accelerating,
+   *(pausing, green) if (not has_pedestrian) invoke (accelerate) -> accelerating,
 
-    running + red / harsh_stop = pausing,
-            + yellow / soft_stop = pausing,
-            + green[has_pedestrian] / harsh_stop = pausing,
+    (running, red) invoke (harsh_stop) -> pausing,
+    (running, yellow) invoke (soft_stop) -> pausing,
+    (running, green) if (has_pedestrian) invoke (harsh_stop) -> pausing,
 
-    accelerating + speed[stable_speed] = running,
+    (accelerating,  speed) if (stable_speed) -> running,
   },
 }
