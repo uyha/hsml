@@ -31,33 +31,33 @@ pub fn deinit(self: *Scanner) void {
 pub fn scan(self: *Scanner) Error!void {
     while (true) {
         if (try self.peek() == null) {
-            try self.parseCurrent();
-            try self.addToken(.eof);
+            try self.scanCurrent();
+            try self.appendToken(.eof);
             break;
         }
 
         self.len += 1;
         self.end.col += 1;
 
-        try self.parseCurrent();
+        try self.scanCurrent();
     }
 }
 
-fn parseCurrent(self: *Scanner) Error!void {
+fn scanCurrent(self: *Scanner) Error!void {
     if (self.current == self.content.items.len) {
         return;
     }
     switch (self.content.items[self.current]) {
-        ':' => try self.addToken(.colon),
-        '*' => try self.addToken(.star),
-        '{' => try self.addToken(.left_brace),
-        '}' => try self.addToken(.right_brace),
-        '(' => try self.addToken(.left_paren),
-        ')' => try self.addToken(.right_paren),
-        ',' => try self.addToken(.comma),
-        '.' => try self.addToken(.dot),
+        ':' => try self.appendToken(.colon),
+        '*' => try self.appendToken(.star),
+        '{' => try self.appendToken(.left_brace),
+        '}' => try self.appendToken(.right_brace),
+        '(' => try self.appendToken(.left_paren),
+        ')' => try self.appendToken(.right_paren),
+        ',' => try self.appendToken(.comma),
+        '.' => try self.appendToken(.dot),
         '-' => if (try self.match('>')) {
-            try self.addToken(.arrow);
+            try self.appendToken(.arrow);
         },
         '\n' => {
             self.current += 1;
@@ -82,14 +82,16 @@ fn parseCurrent(self: *Scanner) Error!void {
                 if (try self.keyword(keyword_token[0], keyword_token[1])) {
                     break;
                 }
+            } else if (try self.identifier()) {
+                return;
             } else {
-                _ = try self.identifier();
+                try self.unexpected();
             }
         },
     }
 }
 
-fn addToken(self: *Scanner, token_type: Token.Type) Allocator.Error!void {
+fn appendToken(self: *Scanner, token_type: Token.Type) Allocator.Error!void {
     try self.tokens.append(
         self.arena,
         .{
@@ -138,7 +140,7 @@ fn keyword(
             }
         }
 
-        try self.addToken(token_type);
+        try self.appendToken(token_type);
         return true;
     }
     return false;
@@ -155,13 +157,23 @@ fn identifier(self: *Scanner) Error!bool {
                     else => break,
                 }
             }
-            try self.addToken(.identifier);
+            try self.appendToken(.identifier);
             return true;
         },
         else => {},
     }
 
     return false;
+}
+fn unexpected(self: *Scanner) Error!void {
+    while (try self.peek()) |c| switch (c) {
+        ' ', '\n', ':' => {
+            try self.appendToken(.unexpected);
+            return;
+        },
+        else => self.len += 1,
+    };
+    try self.appendToken(.unexpected);
 }
 
 test "Single character tokens" {
@@ -243,7 +255,7 @@ test "Partial real" {
 
     var reader: std.Io.Reader = .fixed(
         \\simple: {
-        \\resources:{}
+        \\res0urc3s:{}
         \\}
     );
     var scanner: Scanner = .init(gpa, &reader);
@@ -261,6 +273,22 @@ test "Partial real" {
         .{ .type = .right_brace, .pos = 21, .len = 1, .line = 2, .col = 12 },
         .{ .type = .right_brace, .pos = 23, .len = 1, .line = 3, .col = 1 },
         .{ .type = .eof, .pos = 24, .len = 0, .line = 3, .col = 2 },
+    }, scanner.tokens.items);
+}
+test "unexpected" {
+    const gpa = t.allocator;
+
+    var reader: std.Io.Reader = .fixed(
+        \\1
+    );
+    var scanner: Scanner = .init(gpa, &reader);
+    defer scanner.deinit();
+
+    try scanner.scan();
+
+    try t.expectEqualDeep(&[_]Token{
+        .{ .type = .unexpected, .pos = 0, .len = 1, .line = 1, .col = 1 },
+        .{ .type = .eof, .pos = 1, .len = 0, .line = 1, .col = 2 },
     }, scanner.tokens.items);
 }
 

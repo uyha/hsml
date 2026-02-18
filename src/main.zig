@@ -12,7 +12,10 @@ pub fn main(init: Init) !void {
     var iter = init.minimal.args.iterate();
     _ = iter.skip();
 
-    const path = iter.next() orelse @panic("Expect a file path");
+    const path = iter.next() orelse {
+        try std.Io.File.stderr().writeStreamingAll(init.io, "Please give an input path\n");
+        return;
+    };
     const file: std.Io.File = try openFile(io, path);
     defer file.close(io);
 
@@ -20,12 +23,11 @@ pub fn main(init: Init) !void {
     var freader = file.readerStreaming(io, &buffer);
     const reader = &freader.interface;
 
-    var scanner: Scanner = .init;
-
-    try scanner.scan(arena, reader);
+    var scanner: Scanner = .init(arena, reader);
+    try scanner.scan();
 
     for (scanner.tokens.items) |token| {
-        std.debug.print("{}\n", .{token});
+        std.debug.print("{} {s}\n", .{ token, token.lexeme(scanner.content.items) });
     }
 }
 
