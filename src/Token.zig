@@ -19,6 +19,10 @@ pub const Type = enum {
 
     identifier,
 
+    luastr_left,
+    luastr_content,
+    luastr_right,
+
     eof,
 
     unexpected,
@@ -28,9 +32,10 @@ type: Type,
 pos: usize,
 len: usize,
 
-line: usize,
-col: usize,
+cursor: Cursor,
 
 pub fn lexeme(self: Token, content: []const u8) []const u8 {
     return content[self.pos .. self.pos + self.len];
 }
+
+const Cursor = @import("Cursor.zig");

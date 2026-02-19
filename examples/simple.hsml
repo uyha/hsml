@@ -15,7 +15,10 @@ simple: {
   actions: {
     harsh_stop(self.motor),
     soft_stop(self.motor),
-    accelerate(self.motor),
+    accelerate: {
+      zig: [[accelerate(self.motor)]],
+      cpp: [[accelerate(this->motor)]],
+    },
   },
 
   transitions: {

@@ -27,7 +27,7 @@ pub fn main(init: Init) !void {
     try scanner.scan();
 
     for (scanner.tokens.items) |token| {
-        std.debug.print("{} {s}\n", .{ token, token.lexeme(scanner.content.items) });
+        std.debug.print("{} \"{s}\"\n", .{ token, token.lexeme(scanner.content.items) });
     }
 }
 
