@@ -3,10 +3,10 @@ const Token = @This();
 pub const Type = enum {
     colon,
     star,
-    left_brace,
-    right_brace,
-    left_paren,
-    right_paren,
+    brace_left,
+    brace_right,
+    paren_left,
+    paren_right,
     comma,
     dot,
 
@@ -16,6 +16,7 @@ pub const Type = enum {
     @"if",
     invoke,
     self,
+
     identifier,
 
     eof,

@@ -50,10 +50,10 @@ fn scanCurrent(self: *Scanner) Error!void {
     switch (self.content.items[self.current]) {
         ':' => try self.appendToken(.colon),
         '*' => try self.appendToken(.star),
-        '{' => try self.appendToken(.left_brace),
-        '}' => try self.appendToken(.right_brace),
-        '(' => try self.appendToken(.left_paren),
-        ')' => try self.appendToken(.right_paren),
+        '{' => try self.appendToken(.brace_left),
+        '}' => try self.appendToken(.brace_right),
+        '(' => try self.appendToken(.paren_left),
+        ')' => try self.appendToken(.paren_right),
         ',' => try self.appendToken(.comma),
         '.' => try self.appendToken(.dot),
         '-' => if (try self.match('>')) {
@@ -191,10 +191,10 @@ test "Single character tokens" {
     try t.expectEqualDeep(&[_]Token{
         .{ .type = .colon, .pos = 0, .len = 1, .line = 1, .col = 1 },
         .{ .type = .star, .pos = 1, .len = 1, .line = 1, .col = 2 },
-        .{ .type = .left_brace, .pos = 2, .len = 1, .line = 1, .col = 3 },
-        .{ .type = .right_brace, .pos = 3, .len = 1, .line = 1, .col = 4 },
-        .{ .type = .left_paren, .pos = 4, .len = 1, .line = 1, .col = 5 },
-        .{ .type = .right_paren, .pos = 5, .len = 1, .line = 1, .col = 6 },
+        .{ .type = .brace_left, .pos = 2, .len = 1, .line = 1, .col = 3 },
+        .{ .type = .brace_right, .pos = 3, .len = 1, .line = 1, .col = 4 },
+        .{ .type = .paren_left, .pos = 4, .len = 1, .line = 1, .col = 5 },
+        .{ .type = .paren_right, .pos = 5, .len = 1, .line = 1, .col = 6 },
         .{ .type = .comma, .pos = 6, .len = 1, .line = 1, .col = 7 },
         .{ .type = .dot, .pos = 7, .len = 1, .line = 1, .col = 8 },
         .{ .type = .comma, .pos = 9, .len = 1, .line = 2, .col = 1 },
@@ -266,12 +266,12 @@ test "Partial real" {
     try t.expectEqualDeep(&[_]Token{
         .{ .type = .identifier, .pos = 0, .len = 6, .line = 1, .col = 1 },
         .{ .type = .colon, .pos = 6, .len = 1, .line = 1, .col = 7 },
-        .{ .type = .left_brace, .pos = 8, .len = 1, .line = 1, .col = 9 },
+        .{ .type = .brace_left, .pos = 8, .len = 1, .line = 1, .col = 9 },
         .{ .type = .identifier, .pos = 10, .len = 9, .line = 2, .col = 1 },
         .{ .type = .colon, .pos = 19, .len = 1, .line = 2, .col = 10 },
-        .{ .type = .left_brace, .pos = 20, .len = 1, .line = 2, .col = 11 },
-        .{ .type = .right_brace, .pos = 21, .len = 1, .line = 2, .col = 12 },
-        .{ .type = .right_brace, .pos = 23, .len = 1, .line = 3, .col = 1 },
+        .{ .type = .brace_left, .pos = 20, .len = 1, .line = 2, .col = 11 },
+        .{ .type = .brace_right, .pos = 21, .len = 1, .line = 2, .col = 12 },
+        .{ .type = .brace_right, .pos = 23, .len = 1, .line = 3, .col = 1 },
         .{ .type = .eof, .pos = 24, .len = 0, .line = 3, .col = 2 },
     }, scanner.tokens.items);
 }
