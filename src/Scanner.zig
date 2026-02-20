@@ -11,16 +11,16 @@ len: usize = 0,
 start: Cursor = .{ .line = 0, .col = 0 },
 end: Cursor = .{ .line = 0, .col = 0 },
 
-arena: Allocator,
+gpa: Allocator,
 reader: *Io.Reader,
 
-pub fn init(arena: Allocator, reader: *Io.Reader) Scanner {
-    return .{ .arena = arena, .reader = reader };
+pub fn init(gpa: Allocator, reader: *Io.Reader) Scanner {
+    return .{ .gpa = gpa, .reader = reader };
 }
 
 pub fn deinit(self: *Scanner) void {
-    self.content.deinit(self.arena);
-    self.tokens.deinit(self.arena);
+    self.content.deinit(self.gpa);
+    self.tokens.deinit(self.gpa);
 }
 
 pub fn scan(self: *Scanner) Error!void {
@@ -88,7 +88,7 @@ fn scanCurrent(self: *Scanner) Error!void {
 
 fn appendToken(self: *Scanner, token_type: Token.Type) Allocator.Error!void {
     try self.tokens.append(
-        self.arena,
+        self.gpa,
         .{
             .type = token_type,
             .pos = self.current,
@@ -104,7 +104,7 @@ fn peek(self: *Scanner) Error!?u8 {
     assert(self.current + self.len <= self.content.items.len);
     if (self.current + self.len == self.content.items.len) {
         try self.content.append(
-            self.arena,
+            self.gpa,
             self.reader.takeByte() catch |err| switch (err) {
                 error.EndOfStream => return null,
                 else => |e| return e,
