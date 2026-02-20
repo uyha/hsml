@@ -23,16 +23,15 @@ pub fn main(init: Init) !void {
     var freader = file.readerStreaming(io, &buffer);
     const reader = &freader.interface;
 
-    var scanner: Scanner = .init(arena, reader);
-    try scanner.scan();
+    const tokens: Tokens = try .scan(arena, reader);
 
-    for (scanner.tokens.items) |token| {
-        std.debug.print("{} \"{s}\"\n", .{ token, token.lexeme(scanner.content.items) });
+    for (tokens.tokens.items) |token| {
+        std.debug.print("{} \"{s}\"\n", .{ token, token.lexeme(tokens.content.items) });
     }
 }
 
 const hsml = @import("hsml");
-const Scanner = hsml.Scanner;
+const Tokens = hsml.Tokens;
 
 const std = @import("std");
 const Init = std.process.Init;
