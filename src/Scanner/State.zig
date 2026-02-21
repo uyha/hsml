@@ -77,8 +77,10 @@ fn scanCurrent(self: *State) Error!void {
             inline for ([_]struct { []const u8, Token.Type }{
                 .{ "if", .@"if" },
                 .{ "const", .@"const" },
+                .{ "volatile", .@"volatile" },
                 .{ "invoke", .invoke },
                 .{ "self", .self },
+                .{ "from", .from },
             }) |keyword_token| {
                 if (try self.keyword(keyword_token[0], keyword_token[1])) {
                     break;

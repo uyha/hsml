@@ -45,8 +45,8 @@ test "Multi character tokens" {
 
     var reader: std.Io.Reader = .fixed(
         \\->:->->
-        \\ if const  invoke
-        \\   self
+        \\ if const  volatile  invoke
+        \\   self from
     );
     var scanner: Scanner = try .scan(gpa, &reader);
     defer scanner.deinit(gpa);
@@ -58,13 +58,16 @@ test "Multi character tokens" {
         .{ .type = .arrow, .pos = 5, .len = 2, .cursor = .{ .line = 0, .col = 5 } },
         .{ .type = .@"if", .pos = 9, .len = 2, .cursor = .{ .line = 1, .col = 1 } },
         .{ .type = .@"const", .pos = 12, .len = 5, .cursor = .{ .line = 1, .col = 4 } },
-        .{ .type = .invoke, .pos = 19, .len = 6, .cursor = .{ .line = 1, .col = 11 } },
-        .{ .type = .self, .pos = 29, .len = 4, .cursor = .{ .line = 2, .col = 3 } },
-        .{ .type = .eof, .pos = 33, .len = 0, .cursor = .{ .line = 2, .col = 7 } },
+        .{ .type = .@"volatile", .pos = 19, .len = 8, .cursor = .{ .line = 1, .col = 11 } },
+        .{ .type = .invoke, .pos = 29, .len = 6, .cursor = .{ .line = 1, .col = 21 } },
+        .{ .type = .self, .pos = 39, .len = 4, .cursor = .{ .line = 2, .col = 3 } },
+        .{ .type = .from, .pos = 44, .len = 4, .cursor = .{ .line = 2, .col = 8 } },
+        .{ .type = .eof, .pos = 48, .len = 0, .cursor = .{ .line = 2, .col = 12 } },
     }, scanner.tokens.items);
     try t.expectEqualStrings("->", scanner.tokens.items[0].lexeme(scanner.content.items));
     try t.expectEqualStrings("if", scanner.tokens.items[4].lexeme(scanner.content.items));
-    try t.expectEqualStrings("self", scanner.tokens.items[7].lexeme(scanner.content.items));
+    try t.expectEqualStrings("self", scanner.tokens.items[8].lexeme(scanner.content.items));
+    try t.expectEqualStrings("from", scanner.tokens.items[9].lexeme(scanner.content.items));
 }
 test "Single identifier" {
     const gpa = t.allocator;

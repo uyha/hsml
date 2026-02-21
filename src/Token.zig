@@ -13,7 +13,9 @@ pub const Type = enum {
     arrow,
 
     @"const",
+    @"volatile",
     @"if",
+    from,
     invoke,
     self,
 
