@@ -2,6 +2,8 @@ const State = @This();
 
 pub const Error = Allocator.Error || error{ReadFailed};
 
+gpa: Allocator,
+reader: *Io.Reader,
 content: *std.ArrayList(u8),
 tokens: *std.ArrayList(Token),
 
@@ -11,10 +13,33 @@ len: usize = 0,
 start: Cursor = .{ .line = 0, .col = 0 },
 end: Cursor = .{ .line = 0, .col = 0 },
 
-gpa: Allocator,
-reader: *Io.Reader,
+pub fn scan(
+    gpa: Allocator,
+    reader: *Io.Reader,
+    content: *std.ArrayList(u8),
+    tokens: *std.ArrayList(Token),
+) Error!void {
+    var state: State = .{
+        .gpa = gpa,
+        .reader = reader,
+        .content = content,
+        .tokens = tokens,
+    };
+    while (true) {
+        if (try state.peek() == null) {
+            try state.scanCurrent();
+            try state.appendToken(.eof);
+            break;
+        }
 
-pub fn scanCurrent(self: *State) Error!void {
+        state.len += 1;
+        state.end.col += 1;
+
+        try state.scanCurrent();
+    }
+}
+
+fn scanCurrent(self: *State) Error!void {
     if (self.current == self.content.items.len) {
         return;
     }
@@ -62,7 +87,7 @@ pub fn scanCurrent(self: *State) Error!void {
     }
 }
 
-pub fn appendToken(self: *State, token_type: Token.Type) Allocator.Error!void {
+fn appendToken(self: *State, token_type: Token.Type) Allocator.Error!void {
     try self.tokens.append(
         self.gpa,
         .{
@@ -76,7 +101,7 @@ pub fn appendToken(self: *State, token_type: Token.Type) Allocator.Error!void {
     self.len = 0;
     self.start = self.end;
 }
-pub fn peek(self: *State) Error!?u8 {
+fn peek(self: *State) Error!?u8 {
     assert(self.current + self.len <= self.content.items.len);
     if (self.current + self.len == self.content.items.len) {
         try self.content.append(

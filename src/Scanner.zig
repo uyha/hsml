@@ -11,26 +11,7 @@ pub fn deinit(self: *Scanner, gpa: Allocator) void {
 
 pub fn scan(gpa: Allocator, reader: *Io.Reader) Error!Scanner {
     var scanner: Scanner = .{};
-    var state: State = .{
-        .content = &scanner.content,
-        .tokens = &scanner.tokens,
-        .gpa = gpa,
-        .reader = reader,
-    };
-
-    while (true) {
-        if (try state.peek() == null) {
-            try state.scanCurrent();
-            try state.appendToken(.eof);
-            break;
-        }
-
-        state.len += 1;
-        state.end.col += 1;
-
-        try state.scanCurrent();
-    }
-
+    try State.scan(gpa, reader, &scanner.content, &scanner.tokens);
     return scanner;
 }
 
