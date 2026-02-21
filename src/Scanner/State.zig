@@ -55,6 +55,11 @@ fn scanCurrent(self: *State) Error!void {
         '-' => if (try self.match('>')) {
             try self.appendToken(.arrow);
         },
+        '_' => {
+            if (!try self.identifier()) {
+                try self.appendToken(.underscore);
+            }
+        },
         '\n' => {
             self.current += 1;
             self.len = 0;
@@ -144,7 +149,7 @@ fn keyword(
 }
 fn identifier(self: *State) Error!bool {
     switch (self.content.items[self.current]) {
-        'a'...'z', 'A'...'Z' => {
+        'a'...'z', 'A'...'Z', '_' => |start| {
             while (try self.peek()) |c| {
                 switch (c) {
                     'a'...'z', 'A'...'Z', '0'...'9', '_' => {
@@ -153,6 +158,9 @@ fn identifier(self: *State) Error!bool {
                     },
                     else => break,
                 }
+            }
+            if (start == '_' and self.len == 1) {
+                return false;
             }
             try self.appendToken(.identifier);
             return true;

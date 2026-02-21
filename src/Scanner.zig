@@ -139,6 +139,23 @@ test "Lua string" {
         .{ .type = .eof, .pos = 54, .len = 0, .cursor = .{ .line = 5, .col = 0 } },
     }, scanner.tokens.items);
 }
+test "underscore" {
+    const gpa = t.allocator;
+
+    var reader: std.Io.Reader = .fixed(
+        \\_ _a __ _a_
+    );
+    var scanner: Scanner = try .scan(gpa, &reader);
+    defer scanner.deinit(gpa);
+
+    try t.expectEqualDeep(&[_]Token{
+        .{ .type = .underscore, .pos = 0, .len = 1, .cursor = .{ .line = 0, .col = 0 } },
+        .{ .type = .identifier, .pos = 2, .len = 2, .cursor = .{ .line = 0, .col = 2 } },
+        .{ .type = .identifier, .pos = 5, .len = 2, .cursor = .{ .line = 0, .col = 5 } },
+        .{ .type = .identifier, .pos = 8, .len = 3, .cursor = .{ .line = 0, .col = 8 } },
+        .{ .type = .eof, .pos = 11, .len = 0, .cursor = .{ .line = 0, .col = 11 } },
+    }, scanner.tokens.items);
+}
 test "unexpected" {
     const gpa = t.allocator;
 

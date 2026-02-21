@@ -17,6 +17,7 @@ pub const Type = enum {
     invoke,
     self,
 
+    underscore,
     identifier,
 
     luastr_left,
