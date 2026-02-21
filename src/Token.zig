@@ -18,6 +18,9 @@ pub const Type = enum {
     from,
     invoke,
     self,
+    not,
+    @"and",
+    @"or",
 
     underscore,
     identifier,

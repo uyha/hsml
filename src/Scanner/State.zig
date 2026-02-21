@@ -81,6 +81,9 @@ fn scanCurrent(self: *State) Error!void {
                 .{ "invoke", .invoke },
                 .{ "self", .self },
                 .{ "from", .from },
+                .{ "not", .not },
+                .{ "and", .@"and" },
+                .{ "or", .@"or" },
             }) |keyword_token| {
                 if (try self.keyword(keyword_token[0], keyword_token[1])) {
                     break;
