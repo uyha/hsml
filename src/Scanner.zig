@@ -1,249 +1,37 @@
 const Scanner = @This();
-
-pub const Error = Allocator.Error || error{ReadFailed};
+pub const Error = State.Error;
 
 content: std.ArrayList(u8) = .empty,
 tokens: std.ArrayList(Token) = .empty,
 
-current: usize = 0,
-len: usize = 0,
-
-start: Cursor = .{ .line = 0, .col = 0 },
-end: Cursor = .{ .line = 0, .col = 0 },
-
-gpa: Allocator,
-reader: *Io.Reader,
-
-pub fn init(gpa: Allocator, reader: *Io.Reader) Scanner {
-    return .{ .gpa = gpa, .reader = reader };
+pub fn deinit(self: *Scanner, gpa: Allocator) void {
+    self.content.deinit(gpa);
+    self.tokens.deinit(gpa);
 }
 
-pub fn deinit(self: *Scanner) void {
-    self.content.deinit(self.gpa);
-    self.tokens.deinit(self.gpa);
-}
+pub fn scan(gpa: Allocator, reader: *Io.Reader) Error!Scanner {
+    var scanner: Scanner = .{};
+    var state: State = .{
+        .content = &scanner.content,
+        .tokens = &scanner.tokens,
+        .gpa = gpa,
+        .reader = reader,
+    };
 
-pub fn scan(self: *Scanner) Error!void {
     while (true) {
-        if (try self.peek() == null) {
-            try self.scanCurrent();
-            try self.appendToken(.eof);
+        if (try state.peek() == null) {
+            try state.scanCurrent();
+            try state.appendToken(.eof);
             break;
         }
 
-        self.len += 1;
-        self.end.col += 1;
+        state.len += 1;
+        state.end.col += 1;
 
-        try self.scanCurrent();
-    }
-}
-
-fn scanCurrent(self: *Scanner) Error!void {
-    if (self.current == self.content.items.len) {
-        return;
-    }
-    switch (self.content.items[self.current]) {
-        ':' => try self.appendToken(.colon),
-        '*' => try self.appendToken(.star),
-        '{' => try self.appendToken(.brace_left),
-        '}' => try self.appendToken(.brace_right),
-        '(' => try self.appendToken(.paren_left),
-        ')' => try self.appendToken(.paren_right),
-        ',' => try self.appendToken(.comma),
-        '.' => try self.appendToken(.dot),
-        '-' => if (try self.match('>')) {
-            try self.appendToken(.arrow);
-        },
-        '\n' => {
-            self.current += 1;
-            self.len = 0;
-
-            self.end = .{ .line = self.end.line + 1, .col = 0 };
-            self.start = self.end;
-        },
-        ' ' => {
-            self.current += 1;
-            self.len = 0;
-
-            self.start = self.end;
-        },
-        else => {
-            inline for ([_]struct { []const u8, Token.Type }{
-                .{ "if", .@"if" },
-                .{ "const", .@"const" },
-                .{ "invoke", .invoke },
-                .{ "self", .self },
-            }) |keyword_token| {
-                if (try self.keyword(keyword_token[0], keyword_token[1])) {
-                    break;
-                }
-            } else if (try self.identifier() or try self.luastr()) {
-                return;
-            } else {
-                try self.unexpected();
-            }
-        },
-    }
-}
-
-fn appendToken(self: *Scanner, token_type: Token.Type) Allocator.Error!void {
-    try self.tokens.append(
-        self.gpa,
-        .{
-            .type = token_type,
-            .pos = self.current,
-            .len = self.len,
-            .cursor = self.start,
-        },
-    );
-    self.current += self.len;
-    self.len = 0;
-    self.start = self.end;
-}
-fn peek(self: *Scanner) Error!?u8 {
-    assert(self.current + self.len <= self.content.items.len);
-    if (self.current + self.len == self.content.items.len) {
-        try self.content.append(
-            self.gpa,
-            self.reader.takeByte() catch |err| switch (err) {
-                error.EndOfStream => return null,
-                else => |e| return e,
-            },
-        );
-    }
-    return self.content.items[self.current + self.len];
-}
-fn match(self: *Scanner, expected: u8) Error!bool {
-    if (try self.peek()) |c| {
-        if (c == expected) {
-            self.len += 1;
-            self.end.col += 1;
-            return true;
-        }
-    }
-    return false;
-}
-fn keyword(
-    self: *Scanner,
-    comptime expected: []const u8,
-    comptime token_type: Token.Type,
-) Error!bool {
-    if (self.content.items[self.current] != expected[0]) {
-        return false;
+        try state.scanCurrent();
     }
 
-    for (expected[1..]) |c| {
-        if (!try self.match(c)) {
-            return false;
-        }
-    }
-
-    try self.appendToken(token_type);
-    return true;
-}
-fn identifier(self: *Scanner) Error!bool {
-    switch (self.content.items[self.current]) {
-        'a'...'z', 'A'...'Z' => {
-            while (try self.peek()) |c| {
-                switch (c) {
-                    'a'...'z', 'A'...'Z', '0'...'9', '_' => {
-                        self.len += 1;
-                        self.end.col += 1;
-                    },
-                    else => break,
-                }
-            }
-            try self.appendToken(.identifier);
-            return true;
-        },
-        else => return false,
-    }
-}
-fn unexpected(self: *Scanner) Error!void {
-    while (try self.peek()) |c| switch (c) {
-        ' ', '\n', ':' => {
-            try self.appendToken(.unexpected);
-            return;
-        },
-        else => {
-            self.len += 1;
-            self.end.col += 1;
-        },
-    };
-    try self.appendToken(.unexpected);
-}
-fn luastr(self: *Scanner) Error!bool {
-    if (self.content.items[self.current] != '[') {
-        return false;
-    }
-    const level: usize = blk: {
-        var equals: usize = 0;
-        while (true) {
-            if (try self.match('[')) {
-                break :blk equals;
-            } else if (try self.match('=')) {
-                equals += 1;
-            } else {
-                return false;
-            }
-        }
-    };
-
-    try self.appendToken(.luastr_left);
-    assert(self.len == 0);
-
-    while (try self.peek()) |c| {
-        self.len += 1;
-        self.end.col += 1;
-        if (try self.luastrRight(level)) {
-            break;
-        } else {
-            if (c == '\n') {
-                self.end.line += 1;
-                self.end.col = 0;
-            }
-        }
-    } else {
-        try self.appendToken(.luastr_content);
-    }
-
-    return true;
-}
-
-fn luastrRight(self: *Scanner, level: usize) Error!bool {
-    if (self.content.items[self.current + self.len - 1] != ']') {
-        return false;
-    }
-    var close_level: usize = 0;
-
-    while (true) {
-        if (try self.match(']')) {
-            if (close_level == level) {
-                self.len -= close_level + 2;
-                try self.appendToken(.luastr_content);
-
-                self.len = close_level + 2;
-                self.start.col -= self.len;
-                try self.appendToken(.luastr_right);
-
-                return true;
-            }
-            self.len -= close_level + 1;
-            self.end.col -= close_level + 1;
-            return false;
-        } else if (try self.match('=')) {
-            close_level += 1;
-
-            if (close_level > level) {
-                self.len -= close_level;
-                self.end.col -= close_level;
-                return false;
-            }
-        } else {
-            self.len -= close_level;
-            return false;
-        }
-    }
+    return scanner;
 }
 
 test "Single character tokens" {
@@ -397,12 +185,12 @@ test "unexpected" {
     }, scanner.tokens.items);
 }
 
-const Token = @import("Token.zig");
-
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
 const t = std.testing;
-const assert = std.debug.assert;
+
+const State = @import("Scanner/State.zig");
 
 const Cursor = @import("Cursor.zig");
+const Token = @import("Token.zig");
