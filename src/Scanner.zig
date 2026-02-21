@@ -41,10 +41,8 @@ test "Single character tokens" {
         \\:*{}(),.
         \\,
     );
-    var scanner: Scanner = .init(gpa, &reader);
-    defer scanner.deinit();
-
-    try scanner.scan();
+    var scanner: Scanner = try .scan(gpa, &reader);
+    defer scanner.deinit(gpa);
 
     try t.expectEqualDeep(&[_]Token{
         .{ .type = .colon, .pos = 0, .len = 1, .cursor = .{ .line = 0, .col = 0 } },
@@ -69,10 +67,8 @@ test "Multi character tokens" {
         \\ if const  invoke
         \\   self
     );
-    var scanner: Scanner = .init(gpa, &reader);
-    defer scanner.deinit();
-
-    try scanner.scan();
+    var scanner: Scanner = try .scan(gpa, &reader);
+    defer scanner.deinit(gpa);
 
     try t.expectEqualDeep(&[_]Token{
         .{ .type = .arrow, .pos = 0, .len = 2, .cursor = .{ .line = 0, .col = 0 } },
@@ -95,10 +91,8 @@ test "Single identifier" {
     var reader: std.Io.Reader = .fixed(
         \\simple:
     );
-    var scanner: Scanner = .init(gpa, &reader);
-    defer scanner.deinit();
-
-    try scanner.scan();
+    var scanner: Scanner = try .scan(gpa, &reader);
+    defer scanner.deinit(gpa);
 
     try t.expectEqualDeep(&[_]Token{
         .{ .type = .identifier, .pos = 0, .len = 6, .cursor = .{ .line = 0, .col = 0 } },
@@ -116,10 +110,8 @@ test "Partial real" {
         \\res0urc3s:{}
         \\}
     );
-    var scanner: Scanner = .init(gpa, &reader);
-    defer scanner.deinit();
-
-    try scanner.scan();
+    var scanner: Scanner = try .scan(gpa, &reader);
+    defer scanner.deinit(gpa);
 
     try t.expectEqualDeep(&[_]Token{
         .{ .type = .identifier, .pos = 0, .len = 6, .cursor = .{ .line = 0, .col = 0 } },
@@ -144,10 +136,8 @@ test "Lua string" {
         \\[==[aaa]===]]==]
         \\
     );
-    var scanner: Scanner = .init(gpa, &reader);
-    defer scanner.deinit();
-
-    try scanner.scan();
+    var scanner: Scanner = try .scan(gpa, &reader);
+    defer scanner.deinit(gpa);
 
     try t.expectEqualDeep(&[_]Token{
         .{ .type = .luastr_left, .pos = 0, .len = 2, .cursor = .{ .line = 0, .col = 0 } },
@@ -174,10 +164,8 @@ test "unexpected" {
     var reader: std.Io.Reader = .fixed(
         \\1
     );
-    var scanner: Scanner = .init(gpa, &reader);
-    defer scanner.deinit();
-
-    try scanner.scan();
+    var scanner: Scanner = try .scan(gpa, &reader);
+    defer scanner.deinit(gpa);
 
     try t.expectEqualDeep(&[_]Token{
         .{ .type = .unexpected, .pos = 0, .len = 1, .cursor = .{ .line = 0, .col = 0 } },
