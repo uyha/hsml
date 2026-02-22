@@ -1,0 +1,109 @@
+Root <- skip IDENTIFIER COLON BRACE_LEFT (
+          Component (COMMA Component)* COMMA?
+        )? BRACE_RIGHT eof
+
+Component <- Resources
+           / States
+           / Events
+           / Guards
+           / Actions
+           / Transitions
+
+Resources      <- RESOURCES BRACE_LEFT (
+                    RESOURCES_Decl (COMMA RESOURCES_Decl)* COMMA?
+                  )? BRACE_RIGHT skip
+RESOURCES_Decl <- IDENTIFIER COLON RESOURCES_Type skip
+RESOURCES_Type <- STAR? CONST? VOLATILE? IDENTIFIER
+
+States       <- STATES BRACE_LEFT (
+                  State (COMMA State)* COMMA?
+                )? BRACE_RIGHT skip
+State        <- STATE_Import / STATE_Bare skip
+STATE_Import <- IDENTIFIER FROM LUASTRING
+STATE_Bare   <- IDENTIFIER
+
+Events <- EVENTS BRACE_LEFT (
+            Event (COMMA Event)* COMMA?
+          )? BRACE_RIGHT skip
+Event  <- IDENTIFIER
+
+Guards     <- GUARDS BRACE_LEFT (
+                Guard (COMMA Guard)* COMMA?
+              )? BRACE_RIGHT skip
+Guard      <- GUARD_Lang / GUARD_Bare skip
+GUARD_Lang <- IDENTIFIER LUASTRING
+GUARD_Bare <- FunctionCall
+
+Actions     <- ACTIONS BRACE_LEFT (
+                 Action (COMMA Action)* COMMA?
+               )? BRACE_RIGHT skip
+Action      <- ACTION_Lang / ACTION_Bare skip
+ACTION_Lang <- IDENTIFIER COLON LUASTRING
+ACTION_Bare <- FunctionCall
+
+Transitions           <- TRANSITIONS BRACE_LEFT (
+                           Transition (COMMA Transition)* COMMA?
+                         )? BRACE_RIGHT skip
+Transition            <- STAR? TRANSITION_Match TRANSITION_Guard?
+                         TRANSITION_Invocation? TRANSITION_Target? skip
+TRANSITION_Match      <- TRANSITION_State COMMA TRANSITION_Event skip
+TRANSITION_State      <- UNDERSCORE / IDENTIFIER
+TRANSITION_Event      <- UNDERSCORE / IDENTIFIER
+TRANSITION_Guard      <- IF PAREN_LEFT CondExprOr PAREN_RIGHT
+TRANSITION_Invocation <- INVOKE PAREN_LEFT
+                            IDENTIFIER (COMMA IDENTIFIER)* COMMA?
+                         ) PAREN_RIGHT
+TRANSITION_Target     <- ARROW IDENTIFIER
+
+FunctionCall       <- IDENTIFIER PAREN_LEFT (
+                        FUNCTIONCALL_param (COMMA FUNCTIONCALL_param)*
+                        COMMA?
+                      )* PAREN_RIGHT skip
+FUNCTIONCALL_param <- IDENTIFIER (DOT IDENTIFIER)*
+
+CondExpr    <- (PAREN_LEFT CondExprOr PAREN_RIGHT)
+             / CondExprOr
+CondExprOr  <- CondExprAnd (OR CondExprAnd)*
+CondExprAnd <- CondExprNot (OR CondExprNot)*
+CondExprNot <- NOT? IDENTIFIER
+
+# Tokens
+skip <- [ \n]*
+eof <- !.
+
+COLON       <- ':' skip
+BRACE_LEFT  <- '{' skip
+BRACE_RIGHT <- '}' skip
+STAR        <- '*' skip
+DOT         <- '.' skip
+PAREN_LEFT  <- '(' skip
+PAREN_RIGHT <- ')' skip
+
+CONST    <- 'const' skip
+VOLATILE <- 'volatile' skip
+FROM     <- 'from' skip
+IF       <- 'if' skip
+NOT      <- 'not' skip
+AND      <- 'and' skip
+OR       <- 'or' skip
+INVOKE   <- 'invoke' skip
+ARROW    <- '->' skip
+
+RESOURCES   <- 'resources' skip
+STATES      <- 'states' skip
+EVENTS      <- 'events' skip
+GUARDS      <- 'guards' skip
+ACTIONS     <- 'actions' skip
+TRANSITIONS <- 'transitions' skip
+
+UNDERSCORE <- '_' !IDENTIFIER skip
+IDENTIFIER <- [a-zA-Z_] [a-zA-Z0-9_]* skip
+
+# This is not the actual grammar for Lua strings, but I have no idea how to
+# express it in PEG. A Lua string has to start with `[=*[` and ends with `]=*]`
+# with the amount of `=` being equal to each other (no equal symbols is also
+# allowed).
+LUASTRING         <- LUASTRING_Left LUASTRING_Content LUASTRING_Right
+LUASTRING_Left    <- '[['
+LUASTRING_Content <- .*
+LUASTRING_Right   <- ']]'

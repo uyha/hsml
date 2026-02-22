@@ -1,27 +1,31 @@
-simple: {
-  resources: {
+simple {
+  resources {
     motor: *Motor,
     road: *const road,
   },
 
-  states: {running, pausing, accelerating},
+  states {
+    running from [[running.hsml]],
+    pausing,
+    accelerating
+  },
 
-  events: {red, yellow, green, speed},
+  events {red, yellow, green, speed},
 
-  guards: {
+  guards {
     has_pedestrian(self.road),
   },
 
-  actions: {
+  actions {
     harsh_stop(self.motor),
     soft_stop(self.motor),
-    accelerate: {
+    accelerate {
       zig: [[accelerate(self.motor)]],
       cpp: [[accelerate(this->motor)]],
     },
   },
 
-  transitions: {
+  transitions {
    *(pausing, green) if (not has_pedestrian) invoke (accelerate) -> accelerating,
 
     (running, red) invoke (harsh_stop) -> pausing,
