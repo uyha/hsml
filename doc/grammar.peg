@@ -9,11 +9,11 @@ Component <- Resources
            / Actions
            / Transitions
 
-Resources      <- RESOURCES BRACE_LEFT (
-                    RESOURCES_Decl (COMMA RESOURCES_Decl)* COMMA?
-                  )? BRACE_RIGHT skip
-RESOURCES_Decl <- IDENTIFIER COLON RESOURCES_Type skip
-RESOURCES_Type <- STAR? CONST? VOLATILE? IDENTIFIER
+Resources     <- RESOURCES BRACE_LEFT (
+                   Resource (COMMA Resource)* COMMA?
+                 )? BRACE_RIGHT skip
+Resource      <- IDENTIFIER COLON RESOURCE_Type skip
+RESOURCE_Type <- STAR? CONST? VOLATILE? IDENTIFIER
 
 States       <- STATES BRACE_LEFT (
                   State (COMMA State)* COMMA?
