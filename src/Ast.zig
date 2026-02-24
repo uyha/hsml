@@ -33,8 +33,6 @@ pub const Node = union(enum) {
     missing: Token.Type,
 };
 
-pub const Events = std.ArrayList(usize);
-
 pub const Root = struct {
     name: ?usize,
     brace_left: usize,
@@ -60,6 +58,15 @@ pub const Resource = struct {
     @"const": ?usize,
     @"volatile": ?usize,
     type: usize,
+};
+
+pub const Events = struct {
+    name: usize,
+    brace_left: usize,
+    brace_right: usize,
+
+    items: std.ArrayList(usize) = .empty,
+    commas: std.ArrayList(usize) = .empty,
 };
 
 pub fn parse(
@@ -200,6 +207,7 @@ const State = struct {
     fn component(self: *State) Error!?usize {
         inline for (.{
             resources,
+            events,
         }) |f| {
             if (try f(self)) |index| return index;
         }
@@ -256,6 +264,56 @@ const State = struct {
             .type = try self.tokenOrMissing(.identifier),
         } });
     }
+
+    fn events(self: *State) Error!?usize {
+        const name_index = try self.named("events") orelse return null;
+        const brace_left_index = try self.tokenOrMissing(.brace_left);
+
+        var event_indices: std.ArrayList(usize) = .empty;
+        var comma_indices: std.ArrayList(usize) = .empty;
+
+        const brace_right_index = blk: {
+            if (try self.token(.brace_right)) |index| {
+                break :blk index;
+            }
+            while (true) {
+                if (event_indices.items.len != comma_indices.items.len) {
+                    assert(event_indices.items.len == comma_indices.items.len + 1);
+                    try comma_indices.append(self.arena, try self.missing(.comma));
+                }
+                if (try self.event()) |event_index| {
+                    try event_indices.append(self.arena, event_index);
+                } else {
+                    break :blk try self.unexpected();
+                }
+                if (try self.token(.comma)) |comma_index| {
+                    try comma_indices.append(self.arena, comma_index);
+                }
+
+                if (try self.token(.brace_right)) |index| {
+                    break :blk index;
+                }
+            }
+        };
+
+        return try self.append(.{ .events = .{
+            .name = name_index,
+            .brace_left = brace_left_index,
+            .brace_right = brace_right_index,
+
+            .items = event_indices,
+            .commas = comma_indices,
+        } });
+    }
+    fn event(self: *State) Error!?usize {
+        const current = self.currentToken();
+        if (current.type != .identifier) {
+            return null;
+        }
+
+        self.current += 1;
+        return try self.append(@unionInit(Node, "event", current));
+    }
 };
 
 pub const Iterator = struct {
@@ -308,6 +366,16 @@ pub const Iterator = struct {
                     try self.stack.append(gpa, i);
                 }
                 try self.stack.append(gpa, payload.colon);
+                try self.stack.append(gpa, payload.name);
+            },
+            .events => |payload| {
+                try self.stack.append(gpa, payload.brace_right);
+                try self.appendItemsCommas(
+                    gpa,
+                    payload.items.items,
+                    payload.commas.items,
+                );
+                try self.stack.append(gpa, payload.brace_left);
                 try self.stack.append(gpa, payload.name);
             },
             else => {},

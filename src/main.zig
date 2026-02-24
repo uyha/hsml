@@ -37,7 +37,15 @@ fn scanFile(init: Init) !void {
 fn parse(init: Init) !void {
     const arena = init.arena.allocator();
 
-    var reader: std.Io.Reader = .fixed("hello");
+    var reader: std.Io.Reader = .fixed(
+        \\simple {
+        \\  resources {
+        \\    motor: *Motor,
+        \\    road: *const road,
+        \\  },
+        \\  events {red, yellow, green, speed},
+        \\}
+    );
     var scanner: Scanner = try .scan(arena, &reader);
     defer scanner.deinit(arena);
 
@@ -46,8 +54,40 @@ fn parse(init: Init) !void {
         scanner.content.items,
         scanner.tokens.items,
     );
+    std.debug.print("root: {}\n", .{ast.root()});
 
-    std.debug.print("{}\n", .{ast.root});
+    {
+        var iter = try ast.iterator(arena);
+        while (try iter.next(arena)) |node| {
+            std.debug.print("{}\n", .{node});
+        }
+    }
+
+    const content = scanner.content.items;
+
+    {
+        var iter = try ast.iterator(arena);
+        while (try iter.next(arena)) |node| {
+            switch (node) {
+                inline else => |payload| {
+                    if (@TypeOf(payload) == hsml.Token) {
+                        std.debug.print("{s} ", .{payload.lexeme(content)});
+                    }
+                },
+            }
+        }
+    }
+
+    // const scanned = scanner.tokens.items;
+    // const parsed = tokens.items;
+    //
+    // std.debug.print("{} {}\n", .{ scanned.len, parsed.len });
+    // for (
+    //     scanner.tokens.items[0 .. scanner.tokens.items.len - 1],
+    //     tokens.items,
+    // ) |in, out| {
+    //     std.debug.print("{} {}\n", .{ in.type == out.type, in.pos == out.pos });
+    // }
 }
 
 const hsml = @import("hsml");
