@@ -35,28 +35,24 @@ fn scanFile(init: Init) !void {
 }
 
 fn parse(init: Init) !void {
-    const gpa = init.arena.allocator();
+    const arena = init.arena.allocator();
 
     var reader: std.Io.Reader = .fixed("hello");
-    var scanner: Scanner = try .scan(gpa, &reader);
-    defer scanner.deinit(gpa);
+    var scanner: Scanner = try .scan(arena, &reader);
+    defer scanner.deinit(arena);
 
-    var definitions: std.ArrayList(Definition) = .empty;
-    defer definitions.deinit(gpa);
+    const ast: Ast = try .parse(
+        arena,
+        scanner.content.items,
+        scanner.tokens.items,
+    );
 
-    var events: Definition = .{ .events = .empty };
-    defer events.events.deinit(gpa);
-
-    try definitions.append(gpa, .{ .event = scanner.tokens.items[0] });
-
-    for (definitions.items) |def| {
-        std.debug.print("{}\n", .{def});
-    }
+    std.debug.print("{}\n", .{ast.root});
 }
 
 const hsml = @import("hsml");
 const Scanner = hsml.Scanner;
-const Definition = hsml.Definition;
+const Ast = hsml.Ast;
 
 const std = @import("std");
 const Init = std.process.Init;
