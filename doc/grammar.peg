@@ -1,4 +1,4 @@
-Root <- skip IDENTIFIER COLON BRACE_LEFT (
+Root <- skip IDENTIFIER? BRACE_LEFT (
           Component (COMMA Component)* COMMA?
         )? BRACE_RIGHT eof
 
