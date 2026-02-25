@@ -80,6 +80,8 @@ pub const Guard = struct {
     body: Body,
 };
 
+pub const FunctionCall = struct {};
+
 pub const Parameter = struct {};
 
 pub fn parse(
@@ -171,13 +173,22 @@ const State = struct {
     }
 
     fn root(self: *State) Error!usize {
-        const name = try self.token(.identifier);
-        return try many(.{
-            .tag = .root,
+        const config: ManyConfig = .{
             .open = .brace_left,
             .close = .brace_right,
             .seperator = .comma,
-        }, component)(self, name);
+        };
+        const name = try self.token(.identifier);
+        const result = try self.many(config, component);
+
+        return try self.append(.{ .root = .{
+            .name = name,
+            .brace_left = result.open,
+            .brace_right = result.close,
+
+            .items = result.items,
+            .seps = result.seps,
+        } });
     }
     fn eof(self: *State) Error!usize {
         const current = self.currentToken();
@@ -193,6 +204,11 @@ const State = struct {
             tag: std.meta.Tag(Node),
             child: fn (self: *State) Error!?usize,
         };
+        const config: ManyConfig = .{
+            .open = .brace_left,
+            .close = .brace_right,
+            .seperator = .comma,
+        };
         const matches: []const Match = &.{
             .{ .tag = .resources, .child = resource },
             .{ .tag = .events, .child = event },
@@ -200,15 +216,16 @@ const State = struct {
         };
         inline for (matches) |match| {
             if (try self.named(@tagName(match.tag))) |name| {
-                return try many(
-                    .{
-                        .tag = match.tag,
-                        .open = .brace_left,
-                        .close = .brace_right,
-                        .seperator = .comma,
-                    },
-                    match.child,
-                )(self, name);
+                const result = try self.many(config, match.child);
+
+                return try self.append(@unionInit(Node, @tagName(match.tag), .{
+                    .name = name,
+                    .brace_left = result.open,
+                    .brace_right = result.close,
+
+                    .items = result.items,
+                    .seps = result.seps,
+                }));
             }
         }
 
@@ -218,56 +235,56 @@ const State = struct {
         const Payload = @FieldType(Node, @tagName(tag));
         return @FieldType(Payload, "name");
     }
+    const ManyConfig = struct {
+        open: Token.Type,
+        close: Token.Type,
+        seperator: Token.Type,
+    };
+    const ManyResult = struct {
+        open: usize,
+        close: usize,
+        items: std.ArrayList(usize),
+        seps: std.ArrayList(usize),
+    };
     fn many(
-        comptime config: struct {
-            tag: std.meta.Tag(Node),
-            open: Token.Type,
-            close: Token.Type,
-            seperator: Token.Type,
-        },
-        child: fn (self: *State) Error!?usize,
-    ) fn (self: *State, name: Name(config.tag)) Error!usize {
-        return struct {
-            fn f(self: *State, name: Name(config.tag)) Error!usize {
-                const brace_left = try self.tokenOrMissing(config.open);
+        self: *State,
+        comptime config: ManyConfig,
+        comptime child: fn (self: *State) Error!?usize,
+    ) Error!ManyResult {
+        const open = try self.tokenOrMissing(config.open);
 
-                var items: std.ArrayList(usize) = .empty;
-                var seperators: std.ArrayList(usize) = .empty;
+        var items: std.ArrayList(usize) = .empty;
+        var seps: std.ArrayList(usize) = .empty;
 
-                const brace_right = blk: {
-                    if (try self.token(config.close)) |index| {
-                        break :blk index;
-                    }
-                    while (true) {
-                        if (items.items.len != seperators.items.len) {
-                            assert(items.items.len == seperators.items.len + 1);
-                            try seperators.append(self.arena, try self.missing(.comma));
-                        }
-                        if (try child(self)) |item| {
-                            try items.append(self.arena, item);
-                        } else {
-                            break :blk try self.unexpected();
-                        }
-                        if (try self.tokenTrailing(config.seperator)) |comma| {
-                            try seperators.append(self.arena, comma);
-                        }
-
-                        if (try self.token(config.close)) |index| {
-                            break :blk index;
-                        }
-                    }
-                };
-
-                return try self.append(@unionInit(Node, @tagName(config.tag), .{
-                    .name = name,
-                    .brace_left = brace_left,
-                    .brace_right = brace_right,
-
-                    .items = items,
-                    .seps = seperators,
-                }));
+        const close = blk: {
+            if (try self.token(config.close)) |index| {
+                break :blk index;
             }
-        }.f;
+            while (true) {
+                if (items.items.len != seps.items.len) {
+                    assert(items.items.len == seps.items.len + 1);
+                    try seps.append(self.arena, try self.missing(.comma));
+                }
+                if (try child(self)) |item| {
+                    try items.append(self.arena, item);
+                } else {
+                    break :blk try self.unexpected();
+                }
+                if (try self.tokenTrailing(config.seperator)) |comma| {
+                    try seps.append(self.arena, comma);
+                }
+
+                if (try self.token(config.close)) |index| {
+                    break :blk index;
+                }
+            }
+        };
+        return .{
+            .open = open,
+            .close = close,
+            .items = items,
+            .seps = seps,
+        };
     }
 
     fn resource(self: *State) Error!?usize {
