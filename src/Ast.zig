@@ -14,10 +14,10 @@ pub fn iterator(self: *const Ast, gpa: Allocator) Allocator.Error!Iterator {
 pub const Node = union(enum) {
     root: Root,
 
-    resources: Resources,
+    resources: Many("resources"),
     resource: Resource,
 
-    events: Events,
+    events: Many("events"),
     event: Token,
 
     identifier: Token,
@@ -42,14 +42,18 @@ pub const Root = struct {
     commas: std.ArrayList(usize) = .empty,
 };
 
-pub const Resources = struct {
-    name: usize,
-    brace_left: usize,
-    brace_right: usize,
+pub fn Many(comptime expected_identifier: []const u8) type {
+    return struct {
+        pub const identifier = expected_identifier;
 
-    items: std.ArrayList(usize) = .empty,
-    commas: std.ArrayList(usize) = .empty,
-};
+        name: usize,
+        brace_left: usize,
+        brace_right: usize,
+
+        items: std.ArrayList(usize) = .empty,
+        commas: std.ArrayList(usize) = .empty,
+    };
+}
 
 pub const Resource = struct {
     name: usize,
@@ -58,15 +62,6 @@ pub const Resource = struct {
     @"const": ?usize,
     @"volatile": ?usize,
     type: usize,
-};
-
-pub const Events = struct {
-    name: usize,
-    brace_left: usize,
-    brace_right: usize,
-
-    items: std.ArrayList(usize) = .empty,
-    commas: std.ArrayList(usize) = .empty,
 };
 
 pub fn parse(
@@ -161,99 +156,77 @@ const State = struct {
     }
 
     fn root(self: *State) Error!usize {
-        const name_index = try self.token(.identifier);
-
-        var components: std.ArrayList(usize) = .empty;
-        var commas: std.ArrayList(usize) = .empty;
-
-        const brace_left_index = try self.tokenOrMissing(.brace_left);
-        const brace_right_index = blk: {
-            if (try self.token(.brace_right)) |index| {
-                break :blk index;
-            }
-            while (true) {
-                if (components.items.len != commas.items.len) {
-                    assert(components.items.len == commas.items.len + 1);
-                    try commas.append(
-                        self.arena,
-                        try self.append(.{ .missing = .comma }),
-                    );
-                }
-                if (try self.component()) |index| {
-                    try components.append(self.arena, index);
-                } else {
-                    break :blk try self.missing(.identifier);
-                }
-                if (try self.tokenTrailing(.comma)) |index| {
-                    try commas.append(self.arena, index);
-                }
-
-                if (try self.token(.brace_right)) |index| {
-                    break :blk index;
-                }
-            }
-        };
-
-        return try self.append(.{
-            .root = .{
-                .name = name_index,
-                .brace_left = brace_left_index,
-                .items = components,
-                .commas = commas,
-                .brace_right = brace_right_index,
-            },
-        });
+        const name = try self.token(.identifier);
+        return try many(.root, component)(self, name);
     }
     fn component(self: *State) Error!?usize {
-        inline for (.{
-            resources,
-            events,
-        }) |f| {
-            if (try f(self)) |index| return index;
+        const Match = struct {
+            tag: std.meta.Tag(Node),
+            child: fn (self: *State) Error!?usize,
+        };
+        const matches: []const Match = &.{
+            .{ .tag = .resources, .child = resource },
+            .{ .tag = .events, .child = event },
+        };
+        inline for (matches) |match| {
+            if (try self.named(@tagName(match.tag))) |name| {
+                return try many(match.tag, match.child)(self, name);
+            }
         }
 
         return null;
     }
-    fn resources(self: *State) Error!?usize {
-        const name_index = try self.named("resources") orelse return null;
-        const brace_left_index = try self.tokenOrMissing(.brace_left);
-
-        var resource_indices: std.ArrayList(usize) = .empty;
-        var comma_indices: std.ArrayList(usize) = .empty;
-
-        const brace_right_index = blk: {
-            if (try self.token(.brace_right)) |index| {
-                break :blk index;
-            }
-            while (true) {
-                if (resource_indices.items.len != comma_indices.items.len) {
-                    assert(resource_indices.items.len == comma_indices.items.len + 1);
-                    try comma_indices.append(self.arena, try self.missing(.comma));
-                }
-                if (try self.resource()) |resource_index| {
-                    try resource_indices.append(self.arena, resource_index);
-                } else {
-                    break :blk try self.unexpected();
-                }
-                if (try self.token(.comma)) |comma_index| {
-                    try comma_indices.append(self.arena, comma_index);
-                }
-
-                if (try self.token(.brace_right)) |index| {
-                    break :blk index;
-                }
-            }
-        };
-
-        return try self.append(.{ .resources = .{
-            .name = name_index,
-            .brace_left = brace_left_index,
-            .brace_right = brace_right_index,
-
-            .items = resource_indices,
-            .commas = comma_indices,
-        } });
+    fn Name(comptime tag: std.meta.Tag(Node)) type {
+        const Payload = @FieldType(Node, @tagName(tag));
+        return @FieldType(Payload, "name");
     }
+    fn many(
+        comptime tag: std.meta.Tag(Node),
+        child: fn (self: *State) Error!?usize,
+    ) fn (self: *State, name: Name(tag)) Error!usize {
+        return struct {
+            fn f(self: *State, name: Name(tag)) Error!usize {
+                const brace_left = try self.tokenOrMissing(.brace_left);
+
+                var items: std.ArrayList(usize) = .empty;
+                var commas: std.ArrayList(usize) = .empty;
+
+                const brace_right = blk: {
+                    if (try self.token(.brace_right)) |index| {
+                        break :blk index;
+                    }
+                    while (true) {
+                        if (items.items.len != commas.items.len) {
+                            assert(items.items.len == commas.items.len + 1);
+                            try commas.append(self.arena, try self.missing(.comma));
+                        }
+                        if (try child(self)) |item_index| {
+                            try items.append(self.arena, item_index);
+                        } else {
+                            break :blk try self.unexpected();
+                        }
+                        if (try self.token(.comma)) |comma_index| {
+                            try commas.append(self.arena, comma_index);
+                        }
+
+                        if (try self.token(.brace_right)) |index| {
+                            break :blk index;
+                        }
+                    }
+                };
+
+                return try self.append(@unionInit(Node, @tagName(tag), .{
+                    .name = name,
+                    .brace_left = brace_left,
+                    .brace_right = brace_right,
+
+                    .items = items,
+                    .commas = commas,
+                }));
+            }
+        }.f;
+    }
+
     fn resource(self: *State) Error!?usize {
         return try self.append(.{ .resource = .{
             .name = try self.token(.identifier) orelse return null,
@@ -262,47 +235,6 @@ const State = struct {
             .@"const" = try self.token(.@"const"),
             .@"volatile" = try self.token(.@"volatile"),
             .type = try self.tokenOrMissing(.identifier),
-        } });
-    }
-
-    fn events(self: *State) Error!?usize {
-        const name_index = try self.named("events") orelse return null;
-        const brace_left_index = try self.tokenOrMissing(.brace_left);
-
-        var event_indices: std.ArrayList(usize) = .empty;
-        var comma_indices: std.ArrayList(usize) = .empty;
-
-        const brace_right_index = blk: {
-            if (try self.token(.brace_right)) |index| {
-                break :blk index;
-            }
-            while (true) {
-                if (event_indices.items.len != comma_indices.items.len) {
-                    assert(event_indices.items.len == comma_indices.items.len + 1);
-                    try comma_indices.append(self.arena, try self.missing(.comma));
-                }
-                if (try self.event()) |event_index| {
-                    try event_indices.append(self.arena, event_index);
-                } else {
-                    break :blk try self.unexpected();
-                }
-                if (try self.token(.comma)) |comma_index| {
-                    try comma_indices.append(self.arena, comma_index);
-                }
-
-                if (try self.token(.brace_right)) |index| {
-                    break :blk index;
-                }
-            }
-        };
-
-        return try self.append(.{ .events = .{
-            .name = name_index,
-            .brace_left = brace_left_index,
-            .brace_right = brace_right_index,
-
-            .items = event_indices,
-            .commas = comma_indices,
         } });
     }
     fn event(self: *State) Error!?usize {

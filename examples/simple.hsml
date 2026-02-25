@@ -7,7 +7,7 @@ simple {
   states {
     running from [[running.hsml]],
     pausing,
-    accelerating
+    accelerating,
   },
 
   events {red, yellow, green, speed},
