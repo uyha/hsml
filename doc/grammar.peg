@@ -30,15 +30,15 @@ Event  <- IDENTIFIER
 Guards     <- GUARDS BRACE_LEFT (
                 Guard (COMMA Guard)* COMMA?
               )? BRACE_RIGHT skip
-Guard      <- GUARD_Lang / GUARD_Bare skip
-GUARD_Lang <- IDENTIFIER LUASTRING
+Guard      <- IDENTIFIER (GUARD_Lang / GUARD_Bare) skip
+GUARD_Lang <- LUASTRING
 GUARD_Bare <- FunctionCall
 
 Actions     <- ACTIONS BRACE_LEFT (
                  Action (COMMA Action)* COMMA?
                )? BRACE_RIGHT skip
-Action      <- ACTION_Lang / ACTION_Bare skip
-ACTION_Lang <- IDENTIFIER COLON LUASTRING
+Action      <- IDENTIFIER (ACTION_Lang / ACTION_Bare) skip
+ACTION_Lang <- COLON LUASTRING
 ACTION_Bare <- FunctionCall
 
 Transitions           <- TRANSITIONS BRACE_LEFT (
@@ -55,7 +55,7 @@ TRANSITION_Invocation <- INVOKE PAREN_LEFT
                          ) PAREN_RIGHT
 TRANSITION_Target     <- ARROW IDENTIFIER
 
-FunctionCall       <- IDENTIFIER PAREN_LEFT (
+FunctionCall       <- PAREN_LEFT (
                         FUNCTIONCALL_param (COMMA FUNCTIONCALL_param)*
                         COMMA?
                       )* PAREN_RIGHT skip

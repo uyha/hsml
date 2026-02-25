@@ -14,14 +14,18 @@ simple {
 
   guards {
     has_pedestrian(self.road),
+    has_fuel {
+      zig [[has_fuel(self.motor)]],
+      cpp [[nope()]],
+    }
   },
 
   actions {
     harsh_stop(self.motor),
     soft_stop(self.motor),
     accelerate {
-      zig: [[accelerate(self.motor)]],
-      cpp: [[accelerate(this->motor)]],
+      zig [[accelerate(self.motor)]],
+      cpp [[accelerate(this->motor)]],
     },
   },
 

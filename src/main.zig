@@ -43,8 +43,8 @@ fn parse(init: Init) !void {
         \\    motor: *Motor,
         \\    road: *const road,
         \\  },
-        \\  events {red, yellow, green, speed}
-        \\
+        \\  events {red, yellow, green, speed},
+        \\}
     );
     var scanner: Scanner = try .scan(arena, &reader);
     defer scanner.deinit(arena);

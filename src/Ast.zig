@@ -12,11 +12,16 @@ pub fn iterator(self: *const Ast, gpa: Allocator) Allocator.Error!Iterator {
 pub const Node = union(enum) {
     root: Root,
 
-    resources: Many("resources"),
+    resources: Many,
     resource: Resource,
 
-    events: Many("events"),
+    events: Many,
     event: Token,
+
+    guards: Many,
+    guard: Guard,
+
+    parameter: Parameter,
 
     identifier: Token,
     colon: Token,
@@ -39,21 +44,17 @@ pub const Root = struct {
     brace_right: usize,
 
     items: std.ArrayList(usize) = .empty,
-    commas: std.ArrayList(usize) = .empty,
+    seps: std.ArrayList(usize) = .empty,
 };
 
-pub fn Many(comptime expected_identifier: []const u8) type {
-    return struct {
-        pub const identifier = expected_identifier;
+pub const Many = struct {
+    name: usize,
+    brace_left: usize,
+    brace_right: usize,
 
-        name: usize,
-        brace_left: usize,
-        brace_right: usize,
-
-        items: std.ArrayList(usize) = .empty,
-        commas: std.ArrayList(usize) = .empty,
-    };
-}
+    items: std.ArrayList(usize) = .empty,
+    seps: std.ArrayList(usize) = .empty,
+};
 
 pub const Resource = struct {
     name: usize,
@@ -63,6 +64,23 @@ pub const Resource = struct {
     @"volatile": ?usize,
     type: usize,
 };
+
+pub const Guard = struct {
+    pub const Bare = struct {
+        paren_left: usize,
+        paren_right: usize,
+    };
+    pub const Lang = struct {};
+    pub const Body = union(enum) {
+        bare: Bare,
+        lang: Lang,
+    };
+
+    name: usize,
+    body: Body,
+};
+
+pub const Parameter = struct {};
 
 pub fn parse(
     arena: std.mem.Allocator,
@@ -154,7 +172,12 @@ const State = struct {
 
     fn root(self: *State) Error!usize {
         const name = try self.token(.identifier);
-        return try many(.root, component)(self, name);
+        return try many(.{
+            .tag = .root,
+            .open = .brace_left,
+            .close = .brace_right,
+            .seperator = .comma,
+        }, component)(self, name);
     }
     fn eof(self: *State) Error!usize {
         const current = self.currentToken();
@@ -173,10 +196,19 @@ const State = struct {
         const matches: []const Match = &.{
             .{ .tag = .resources, .child = resource },
             .{ .tag = .events, .child = event },
+            .{ .tag = .guards, .child = guard },
         };
         inline for (matches) |match| {
             if (try self.named(@tagName(match.tag))) |name| {
-                return try many(match.tag, match.child)(self, name);
+                return try many(
+                    .{
+                        .tag = match.tag,
+                        .open = .brace_left,
+                        .close = .brace_right,
+                        .seperator = .comma,
+                    },
+                    match.child,
+                )(self, name);
             }
         }
 
@@ -187,47 +219,52 @@ const State = struct {
         return @FieldType(Payload, "name");
     }
     fn many(
-        comptime tag: std.meta.Tag(Node),
+        comptime config: struct {
+            tag: std.meta.Tag(Node),
+            open: Token.Type,
+            close: Token.Type,
+            seperator: Token.Type,
+        },
         child: fn (self: *State) Error!?usize,
-    ) fn (self: *State, name: Name(tag)) Error!usize {
+    ) fn (self: *State, name: Name(config.tag)) Error!usize {
         return struct {
-            fn f(self: *State, name: Name(tag)) Error!usize {
-                const brace_left = try self.tokenOrMissing(.brace_left);
+            fn f(self: *State, name: Name(config.tag)) Error!usize {
+                const brace_left = try self.tokenOrMissing(config.open);
 
                 var items: std.ArrayList(usize) = .empty;
-                var commas: std.ArrayList(usize) = .empty;
+                var seperators: std.ArrayList(usize) = .empty;
 
                 const brace_right = blk: {
-                    if (try self.token(.brace_right)) |index| {
+                    if (try self.token(config.close)) |index| {
                         break :blk index;
                     }
                     while (true) {
-                        if (items.items.len != commas.items.len) {
-                            assert(items.items.len == commas.items.len + 1);
-                            try commas.append(self.arena, try self.missing(.comma));
+                        if (items.items.len != seperators.items.len) {
+                            assert(items.items.len == seperators.items.len + 1);
+                            try seperators.append(self.arena, try self.missing(.comma));
                         }
                         if (try child(self)) |item| {
                             try items.append(self.arena, item);
                         } else {
                             break :blk try self.unexpected();
                         }
-                        if (try self.tokenTrailing(.comma)) |comma| {
-                            try commas.append(self.arena, comma);
+                        if (try self.tokenTrailing(config.seperator)) |comma| {
+                            try seperators.append(self.arena, comma);
                         }
 
-                        if (try self.token(.brace_right)) |index| {
+                        if (try self.token(config.close)) |index| {
                             break :blk index;
                         }
                     }
                 };
 
-                return try self.append(@unionInit(Node, @tagName(tag), .{
+                return try self.append(@unionInit(Node, @tagName(config.tag), .{
                     .name = name,
                     .brace_left = brace_left,
                     .brace_right = brace_right,
 
                     .items = items,
-                    .commas = commas,
+                    .seps = seperators,
                 }));
             }
         }.f;
@@ -251,6 +288,10 @@ const State = struct {
 
         self.current += 1;
         return try self.append(@unionInit(Node, "event", current));
+    }
+    fn guard(self: *State) Error!?usize {
+        _ = self;
+        return null;
     }
 };
 
@@ -277,7 +318,7 @@ pub const Iterator = struct {
                 try self.appendItemsCommas(
                     gpa,
                     payload.items.items,
-                    payload.commas.items,
+                    payload.seps.items,
                 );
                 try self.stack.append(gpa, payload.brace_left);
                 if (payload.name) |name| {
@@ -289,7 +330,7 @@ pub const Iterator = struct {
                 try self.appendItemsCommas(
                     gpa,
                     payload.items.items,
-                    payload.commas.items,
+                    payload.seps.items,
                 );
                 try self.stack.append(gpa, payload.brace_left);
                 try self.stack.append(gpa, payload.name);
@@ -313,7 +354,7 @@ pub const Iterator = struct {
                 try self.appendItemsCommas(
                     gpa,
                     payload.items.items,
-                    payload.commas.items,
+                    payload.seps.items,
                 );
                 try self.stack.append(gpa, payload.brace_left);
                 try self.stack.append(gpa, payload.name);
