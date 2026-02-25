@@ -43,8 +43,8 @@ fn parse(init: Init) !void {
         \\    motor: *Motor,
         \\    road: *const road,
         \\  },
-        \\  events {red, yellow, green, speed},
-        \\}
+        \\  events {red, yellow, green, speed}
+        \\
     );
     var scanner: Scanner = try .scan(arena, &reader);
     defer scanner.deinit(arena);
@@ -54,7 +54,7 @@ fn parse(init: Init) !void {
         scanner.content.items,
         scanner.tokens.items,
     );
-    std.debug.print("root: {}\n", .{ast.root()});
+    std.debug.print("root: {}\n", .{ast.root});
 
     {
         var iter = try ast.iterator(arena);
@@ -65,18 +65,17 @@ fn parse(init: Init) !void {
 
     const content = scanner.content.items;
 
-    {
-        var iter = try ast.iterator(arena);
-        while (try iter.next(arena)) |node| {
-            switch (node) {
-                inline else => |payload| {
-                    if (@TypeOf(payload) == hsml.Token) {
-                        std.debug.print("{s} ", .{payload.lexeme(content)});
-                    }
-                },
-            }
+    var iter = try ast.iterator(arena);
+    while (try iter.next(arena)) |node| {
+        switch (node) {
+            inline else => |payload| {
+                if (@TypeOf(payload) == hsml.Token) {
+                    std.debug.print("{s} ", .{payload.lexeme(content)});
+                }
+            },
         }
     }
+    std.debug.print("\n", .{});
 
     // const scanned = scanner.tokens.items;
     // const parsed = tokens.items;

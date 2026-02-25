@@ -1,14 +1,12 @@
 const Ast = @This();
 pub const Error = std.mem.Allocator.Error;
 
+root: usize,
+eof: usize,
 nodes: std.ArrayList(Node),
 
-pub fn root(self: *const Ast) usize {
-    return self.nodes.items.len - 1;
-}
-
 pub fn iterator(self: *const Ast, gpa: Allocator) Allocator.Error!Iterator {
-    return try .init(gpa, self.root(), self.nodes.items);
+    return try .init(gpa, &.{ self.eof, self.root }, self.nodes.items);
 }
 
 pub const Node = union(enum) {
@@ -31,6 +29,8 @@ pub const Node = union(enum) {
 
     unexpected: Token,
     missing: Token.Type,
+
+    eof: Token,
 };
 
 pub const Root = struct {
@@ -69,7 +69,7 @@ pub fn parse(
     content: []const u8,
     tokens: []const Token,
 ) Error!Ast {
-    var ast: Ast = .{ .nodes = .empty };
+    var ast: Ast = .{ .root = undefined, .eof = undefined, .nodes = .empty };
     var state: State = .{
         .arena = arena,
 
@@ -77,7 +77,8 @@ pub fn parse(
         .content = content,
         .tokens = tokens,
     };
-    try state.parse();
+    ast.root = try state.root();
+    ast.eof = try state.eof();
     return ast;
 }
 
@@ -89,10 +90,6 @@ const State = struct {
     tokens: []const Token,
 
     current: usize = 0,
-
-    fn parse(self: *State) Error!void {
-        _ = try self.root();
-    }
 
     fn currentToken(self: *const State) Token {
         assert(self.current < self.tokens.len);
@@ -159,6 +156,15 @@ const State = struct {
         const name = try self.token(.identifier);
         return try many(.root, component)(self, name);
     }
+    fn eof(self: *State) Error!usize {
+        const current = self.currentToken();
+        if (current.type == .eof) {
+            return try self.append(.{ .eof = current });
+        }
+
+        self.current += 1;
+        return try self.missing(.eof);
+    }
     fn component(self: *State) Error!?usize {
         const Match = struct {
             tag: std.meta.Tag(Node),
@@ -200,13 +206,13 @@ const State = struct {
                             assert(items.items.len == commas.items.len + 1);
                             try commas.append(self.arena, try self.missing(.comma));
                         }
-                        if (try child(self)) |item_index| {
-                            try items.append(self.arena, item_index);
+                        if (try child(self)) |item| {
+                            try items.append(self.arena, item);
                         } else {
                             break :blk try self.unexpected();
                         }
-                        if (try self.token(.comma)) |comma_index| {
-                            try commas.append(self.arena, comma_index);
+                        if (try self.tokenTrailing(.comma)) |comma| {
+                            try commas.append(self.arena, comma);
                         }
 
                         if (try self.token(.brace_right)) |index| {
@@ -252,10 +258,12 @@ pub const Iterator = struct {
     stack: std.ArrayList(usize) = .empty,
     nodes: []const Node,
 
-    pub fn init(gpa: Allocator, ast_root: usize, nodes: []const Node) Allocator.Error!Iterator {
+    pub fn init(gpa: Allocator, stack: []const usize, nodes: []const Node) Allocator.Error!Iterator {
         var result: Iterator = .{ .nodes = nodes };
 
-        try result.stack.append(gpa, ast_root);
+        for (stack) |item| {
+            try result.stack.append(gpa, item);
+        }
 
         return result;
     }
