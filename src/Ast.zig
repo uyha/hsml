@@ -13,13 +13,25 @@ pub const Node = union(enum) {
     root: Root,
 
     resources: Many,
-    resource: Resource,
+    resource: union(enum) {
+        map: usize,
+        many: Many,
+    },
 
     events: Many,
     event: Token,
 
     guards: Many,
-    guard: Guard,
+    guard: union(enum) {
+        map: usize,
+        many: Many,
+    },
+
+    actions: Many,
+    action: union(enum) {
+        map: usize,
+        many: Many,
+    },
 
     map: Map,
 
@@ -69,15 +81,6 @@ pub const Many = struct {
 
     items: std.ArrayList(usize) = .empty,
     seps: std.ArrayList(usize) = .empty,
-};
-
-pub const Resource = union(enum) {
-    map: usize,
-    many: Many,
-};
-pub const Guard = union(enum) {
-    map: usize,
-    many: Many,
 };
 
 pub fn parse(
@@ -216,6 +219,7 @@ const State = struct {
             .{ .tag = .resources, .child = resource },
             .{ .tag = .events, .child = event },
             .{ .tag = .guards, .child = guard },
+            .{ .tag = .actions, .child = action },
         };
         inline for (matches) |match| {
             if (try self.named(@tagName(match.tag))) |name| {
@@ -308,6 +312,9 @@ const State = struct {
     }
     fn guard(self: *State) Error!?usize {
         return self.mapOrMany(.guard);
+    }
+    fn action(self: *State) Error!?usize {
+        return self.mapOrMany(.action);
     }
     fn mapOrMany(self: *State, comptime tag: std.meta.Tag(Node)) Error!?usize {
         const name = try self.token(.identifier) orelse return null;

@@ -62,15 +62,15 @@ fn parse(init: Init) !void {
         \\      cpp [[nope()]],
         \\    }
         \\  },
-        // \\
-        // \\  actions {
-        // \\    harsh_stop [[self.motor.harsh_stop()]],
-        // \\    soft_stop [[self.motor.soft_stop()]],
-        // \\    accelerate {
-        // \\      zig [[self.motor.accelerate()]],
-        // \\      cpp [[this->motor.accelerate()]],
-        // \\    },
-        // \\  },
+        \\
+        \\  actions {
+        \\    harsh_stop [[self.motor.harsh_stop()]],
+        \\    soft_stop [[self.motor.soft_stop()]],
+        \\    accelerate {
+        \\      zig [[self.motor.accelerate()]],
+        \\      cpp [[this->motor.accelerate()]],
+        \\    },
+        \\  },
         // \\
         // \\  transitions {
         // \\   *(pausing, green) if (not has_pedestrian) invoke (accelerate) -> accelerating,
