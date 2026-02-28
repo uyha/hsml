@@ -12,8 +12,24 @@ pub fn iterator(self: *const Ast, gpa: Allocator) Allocator.Error!Iterator {
 pub const Node = union(enum) {
     root: Root,
 
-    bare: Bare,
-    map: Map,
+    bare: struct {
+        name: usize,
+        string: usize,
+    },
+    map: union(enum) {
+        bare: usize,
+        lang: Many,
+    },
+
+    states: Many,
+    state: union(enum) {
+        bare: usize,
+        import: struct {
+            name: usize,
+            from: usize,
+            string: usize,
+        },
+    },
 
     resources: Many,
     events: Many,
@@ -41,8 +57,13 @@ pub const Node = union(enum) {
     paren_right: Token,
     star: Token,
     underscore: Token,
+    from: Token,
 
-    string: String,
+    string: struct {
+        open: usize,
+        content: usize,
+        close: usize,
+    },
     string_open: Token,
     string_content: Token,
     string_close: Token,
@@ -51,20 +72,6 @@ pub const Node = union(enum) {
     missing: Token.Type,
 
     eof: Token,
-};
-
-pub const String = struct {
-    open: usize,
-    content: usize,
-    close: usize,
-};
-pub const Bare = struct {
-    name: usize,
-    string: usize,
-};
-pub const Map = union(enum) {
-    bare: usize,
-    lang: Many,
 };
 
 pub const Root = struct {
@@ -100,7 +107,10 @@ pub const Transition = struct {
         comma: usize,
         event: usize,
     };
-    pub const To = struct { arrow: usize, name: usize };
+    pub const To = struct {
+        arrow: usize,
+        name: usize,
+    };
 };
 
 pub fn parse(
@@ -247,6 +257,7 @@ const State = struct {
         };
         const matches: []const Match = &.{
             .{ .tag = .resources, .child = map },
+            .{ .tag = .states, .child = state },
             .{ .tag = .events, .child = map },
             .{ .tag = .guards, .child = map },
             .{ .tag = .actions, .child = map },
@@ -329,6 +340,18 @@ const State = struct {
         };
     }
 
+    fn state(self: *State) Error!?usize {
+        const name = try self.identifier() orelse return null;
+        if (self.peek() == null) {
+            return try self.append(.{ .state = .{ .bare = name } });
+        }
+
+        return try self.append(.{ .state = .{ .import = .{
+            .name = name,
+            .from = try self.token(.from) orelse try self.unexpected(),
+            .string = try self.string() orelse try self.missing(.string_open),
+        } } });
+    }
     fn transition(self: *State) Error!?usize {
         return try self.append(.{ .transition = .{
             .star = try self.token(.star),
@@ -439,6 +462,16 @@ pub const Iterator = struct {
                     },
                 }
             },
+            .state => |payload| {
+                switch (payload) {
+                    .bare => |bare| try self.stack.append(gpa, bare),
+                    .import => |import| {
+                        try self.stack.append(gpa, import.string);
+                        try self.stack.append(gpa, import.from);
+                        try self.stack.append(gpa, import.name);
+                    },
+                }
+            },
             .transition => |payload| {
                 if (payload.to) |index| {
                     try self.stack.append(gpa, index);
@@ -510,6 +543,85 @@ pub const Iterator = struct {
         }
     }
 };
+
+test {
+    var allocator: ArenaAllocator = .init(t.allocator);
+    defer allocator.deinit();
+
+    const arena = allocator.allocator();
+
+    var reader: std.Io.Reader = .fixed(
+        \\simple {
+        \\  resources {
+        \\    motor [[*Motor]],
+        \\    road {
+        \\      zig [[*const road]],
+        \\      cpp [[road const &]],
+        \\    }
+        \\  },
+        \\
+        \\  states {
+        \\    running from [[running.hsml]],
+        \\    pausing,
+        \\    accelerating,
+        \\  },
+        \\
+        \\  events {red [[Red]], yellow [[Yellow]], green [[Green]], speed [[Speed]]},
+        \\
+        \\  guards {
+        \\    has_pedestrian [[self.road.has_pedestrian()]],
+        \\    has_fuel {
+        \\      zig [[has_fuel(self.motor)]],
+        \\      cpp [[nope()]],
+        \\    }
+        \\  },
+        \\
+        \\  actions {
+        \\    harsh_stop [[self.motor.harsh_stop()]],
+        \\    soft_stop [[self.motor.soft_stop()]],
+        \\    accelerate {
+        \\      zig [[self.motor.accelerate()]],
+        \\      cpp [[this->motor.accelerate()]],
+        \\    },
+        \\  },
+        \\
+        \\  transitions {
+        \\   *(pausing, green) if (has_pedestrian) invoke (accelerate) -> accelerating,
+        \\
+        \\    (running, red) invoke (harsh_stop) -> pausing,
+        \\    (running, yellow) invoke (soft_stop) -> pausing,
+        \\    (running, green) if (has_pedestrian) invoke (harsh_stop) -> pausing,
+        \\
+        \\    (_, speed) if (stable_speed) -> running,
+        \\  },
+        \\}
+    );
+    var scanner: Scanner = try .scan(arena, &reader);
+    defer scanner.deinit(arena);
+
+    const ast: Ast = try .parse(
+        arena,
+        scanner.content.items,
+        scanner.tokens.items,
+    );
+
+    const tokens = blk: {
+        var iter = try ast.iterator(arena);
+        var tokens: std.ArrayList(Token) = .empty;
+        while (try iter.next(arena)) |node| {
+            switch (node) {
+                inline else => |payload| {
+                    if (@TypeOf(payload) == Token) {
+                        try tokens.append(arena, payload);
+                    }
+                },
+            }
+        }
+        break :blk tokens;
+    };
+
+    try t.expectEqualSlices(Token, scanner.tokens.items, tokens.items);
+}
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;

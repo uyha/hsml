@@ -47,11 +47,11 @@ fn parse(init: Init) !void {
         \\    }
         \\  },
         \\
-        // \\  states {
-        // \\    running from [[running.hsml]],
-        // \\    pausing,
-        // \\    accelerating,
-        // \\  },
+        \\  states {
+        \\    running from [[running.hsml]],
+        \\    pausing,
+        \\    accelerating,
+        \\  },
         \\
         \\  events {red [[Red]], yellow [[Yellow]], green [[Green]], speed [[Speed]]},
         \\
@@ -118,17 +118,6 @@ fn parse(init: Init) !void {
             }
         }
     }
-
-    // const scanned = scanner.tokens.items;
-    // const parsed = tokens.items;
-    //
-    // std.debug.print("{} {}\n", .{ scanned.len, parsed.len });
-    // for (
-    //     scanner.tokens.items[0 .. scanner.tokens.items.len - 1],
-    //     tokens.items,
-    // ) |in, out| {
-    //     std.debug.print("{} {}\n", .{ in.type == out.type, in.pos == out.pos });
-    // }
 }
 
 const hsml = @import("hsml");
