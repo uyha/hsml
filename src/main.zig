@@ -53,7 +53,7 @@ fn parse(init: Init) !void {
         // \\    accelerating,
         // \\  },
         \\
-        \\  events {red, yellow, green, speed},
+        \\  events {red [[Red]], yellow [[Yellow]], green [[Green]], speed [[Speed]]},
         \\
         \\  guards {
         \\    has_pedestrian [[self.road.has_pedestrian()]],
@@ -79,7 +79,7 @@ fn parse(init: Init) !void {
         \\    (running, yellow) invoke (soft_stop) -> pausing,
         \\    (running, green) if (has_pedestrian) invoke (harsh_stop) -> pausing,
         \\
-        \\    (accelerating, speed) if (stable_speed) -> running,
+        \\    (_, speed) if (stable_speed) -> running,
         \\  },
         \\}
     );

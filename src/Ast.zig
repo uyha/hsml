@@ -12,28 +12,13 @@ pub fn iterator(self: *const Ast, gpa: Allocator) Allocator.Error!Iterator {
 pub const Node = union(enum) {
     root: Root,
 
-    resources: Many,
-    resource: union(enum) {
-        map: usize,
-        many: Many,
-    },
-
-    events: Many,
-    event: Token,
-
-    guards: Many,
-    guard: union(enum) {
-        map: usize,
-        many: Many,
-    },
-
-    actions: Many,
-    action: union(enum) {
-        map: usize,
-        many: Many,
-    },
-
+    bare: Bare,
     map: Map,
+
+    resources: Many,
+    events: Many,
+    guards: Many,
+    actions: Many,
 
     transitions: Many,
     transition: Transition,
@@ -42,19 +27,20 @@ pub const Node = union(enum) {
     transition_guard: Many,
     transition_action: Many,
 
-    identifier: Token,
-    colon: Token,
+    @"const": Token,
+    @"if": Token,
+    @"volatile": Token,
+    arrow: Token,
     brace_left: Token,
     brace_right: Token,
+    colon: Token,
+    comma: Token,
+    identifier: Token,
+    invoke: Token,
     paren_left: Token,
     paren_right: Token,
-    comma: Token,
     star: Token,
-    @"const": Token,
-    @"volatile": Token,
-    @"if": Token,
-    invoke: Token,
-    arrow: Token,
+    underscore: Token,
 
     string: String,
     string_open: Token,
@@ -72,9 +58,13 @@ pub const String = struct {
     content: usize,
     close: usize,
 };
-pub const Map = struct {
+pub const Bare = struct {
     name: usize,
     string: usize,
+};
+pub const Map = union(enum) {
+    bare: usize,
+    lang: Many,
 };
 
 pub const Root = struct {
@@ -143,6 +133,13 @@ const State = struct {
     fn currentToken(self: *const State) Token {
         assert(self.current < self.tokens.len);
         return self.tokens[self.current];
+    }
+    fn peek(self: *const State) ?Token {
+        assert(self.current < self.tokens.len);
+        if (self.current + 1 < self.tokens.len) {
+            return self.tokens[self.current + 1];
+        }
+        return null;
     }
     fn lexeme(self: *const State, source: Token) []const u8 {
         assert(self.current < self.tokens.len);
@@ -249,10 +246,10 @@ const State = struct {
             .seperator = .comma,
         };
         const matches: []const Match = &.{
-            .{ .tag = .resources, .child = resource },
-            .{ .tag = .events, .child = event },
-            .{ .tag = .guards, .child = guard },
-            .{ .tag = .actions, .child = action },
+            .{ .tag = .resources, .child = map },
+            .{ .tag = .events, .child = map },
+            .{ .tag = .guards, .child = map },
+            .{ .tag = .actions, .child = map },
             .{ .tag = .transitions, .child = transition },
         };
         inline for (matches) |match| {
@@ -332,24 +329,6 @@ const State = struct {
         };
     }
 
-    fn resource(self: *State) Error!?usize {
-        return self.mapOrMany(.resource);
-    }
-    fn event(self: *State) Error!?usize {
-        const current = self.currentToken();
-        if (current.type != .identifier) {
-            return null;
-        }
-
-        self.current += 1;
-        return try self.append(.{ .event = current });
-    }
-    fn guard(self: *State) Error!?usize {
-        return self.mapOrMany(.guard);
-    }
-    fn action(self: *State) Error!?usize {
-        return self.mapOrMany(.action);
-    }
     fn transition(self: *State) Error!?usize {
         return try self.append(.{ .transition = .{
             .star = try self.token(.star),
@@ -362,9 +341,9 @@ const State = struct {
     fn transitionFrom(self: *State) Error!?usize {
         return try self.append(.{ .transition_from = .{
             .open = try self.token(.paren_left) orelse return null,
-            .state = try self.tokenOrMissing(.identifier),
+            .state = try self.token(.identifier) orelse try self.tokenOrMissing(.underscore),
             .comma = try self.tokenOrMissing(.comma),
-            .event = try self.tokenOrMissing(.identifier),
+            .event = try self.token(.identifier) orelse try self.tokenOrMissing(.underscore),
             .close = try self.tokenOrMissing(.paren_right),
         } });
     }
@@ -390,30 +369,30 @@ const State = struct {
             .name = try self.tokenOrMissing(.identifier),
         } });
     }
-    fn mapOrMany(self: *State, comptime tag: std.meta.Tag(Node)) Error!?usize {
-        const name = try self.token(.identifier) orelse return null;
+    fn bare(self: *State) Error!?usize {
+        const current = self.currentToken();
+        const next = self.peek() orelse return null;
 
-        if (try self.string()) |string_index| {
-            const index = try self.append(.{ .map = .{
-                .name = name,
-                .string = string_index,
-            } });
-            return try self.append(@unionInit(Node, @tagName(tag), .{ .map = index }));
+        if (current.type != .identifier or next.type != .string_open) {
+            return null;
         }
 
-        const many_result = try self.many(
-            .{ .open = .brace_left, .close = .brace_right, .seperator = .comma },
-            map,
-        );
-        return try self.append(@unionInit(Node, @tagName(tag), .{
-            .many = many_result.of(name),
-        }));
+        return try self.append(.{ .bare = .{
+            .name = try self.identifier() orelse unreachable,
+            .string = try self.string() orelse unreachable,
+        } });
     }
     fn map(self: *State) Error!?usize {
-        return try self.append(.{ .map = .{
-            .name = try self.token(.identifier) orelse return null,
-            .string = try self.string() orelse return null,
-        } });
+        if (try self.bare()) |index| {
+            return try self.append(.{ .map = .{ .bare = index } });
+        }
+
+        const name = try self.identifier() orelse return null;
+        const result = try self.many(
+            .{ .open = .brace_left, .close = .brace_right, .seperator = .comma },
+            bare,
+        );
+        return try self.append(.{ .map = .{ .lang = result.of(name) } });
     }
 };
 
@@ -443,66 +422,69 @@ pub const Iterator = struct {
                     try self.stack.append(gpa, name);
                 }
             },
-            .resources => |payload| {
-                try self.stack.append(gpa, payload.close);
-                try self.appendItems(gpa, payload.items.items, payload.seps.items);
-                try self.stack.append(gpa, payload.open);
+            .bare => |payload| {
+                try self.stack.append(gpa, payload.string);
                 try self.stack.append(gpa, payload.name);
             },
-            .resource => |payload| {
+            .map => |payload| {
                 switch (payload) {
-                    .map => |map| {
-                        try self.stack.append(gpa, map);
+                    .bare => |bare| {
+                        try self.stack.append(gpa, bare);
                     },
-                    .many => |many| {
-                        try self.stack.append(gpa, many.close);
-                        try self.appendItems(gpa, many.items.items, many.seps.items);
-                        try self.stack.append(gpa, many.open);
-                        try self.stack.append(gpa, many.name);
+                    .lang => |lang| {
+                        try self.stack.append(gpa, lang.close);
+                        try self.appendItems(gpa, lang.items.items, lang.seps.items);
+                        try self.stack.append(gpa, lang.open);
+                        try self.stack.append(gpa, lang.name);
                     },
                 }
             },
-            .events => |payload| {
-                try self.stack.append(gpa, payload.close);
-                try self.appendItems(gpa, payload.items.items, payload.seps.items);
-                try self.stack.append(gpa, payload.open);
-                try self.stack.append(gpa, payload.name);
-            },
-            .guards => |payload| {
-                try self.stack.append(gpa, payload.close);
-                try self.appendItems(gpa, payload.items.items, payload.seps.items);
-                try self.stack.append(gpa, payload.open);
-                try self.stack.append(gpa, payload.name);
-            },
-            .guard => |payload| {
-                switch (payload) {
-                    .map => |map| {
-                        try self.stack.append(gpa, map);
-                    },
-                    .many => |many| {
-                        try self.stack.append(gpa, many.close);
-                        try self.appendItems(gpa, many.items.items, many.seps.items);
-                        try self.stack.append(gpa, many.open);
-                        try self.stack.append(gpa, many.name);
-                    },
+            .transition => |payload| {
+                if (payload.to) |index| {
+                    try self.stack.append(gpa, index);
+                }
+                if (payload.action) |index| {
+                    try self.stack.append(gpa, index);
+                }
+                if (payload.guard) |index| {
+                    try self.stack.append(gpa, index);
+                }
+                try self.stack.append(gpa, payload.from);
+                if (payload.star) |index| {
+                    try self.stack.append(gpa, index);
                 }
             },
-            .transitions => |payload| {
+            .transition_from => |payload| {
                 try self.stack.append(gpa, payload.close);
-                try self.appendItems(gpa, payload.items.items, payload.seps.items);
+                try self.stack.append(gpa, payload.event);
+                try self.stack.append(gpa, payload.comma);
+                try self.stack.append(gpa, payload.state);
                 try self.stack.append(gpa, payload.open);
+            },
+            .transition_to => |payload| {
                 try self.stack.append(gpa, payload.name);
+                try self.stack.append(gpa, payload.arrow);
             },
             .string => |payload| {
                 try self.stack.append(gpa, payload.close);
                 try self.stack.append(gpa, payload.content);
                 try self.stack.append(gpa, payload.open);
             },
-            .map => |payload| {
-                try self.stack.append(gpa, payload.string);
-                try self.stack.append(gpa, payload.name);
+            inline else => |payload, tag| {
+                switch (@TypeOf(payload)) {
+                    Token, Token.Type => {},
+                    Many => {
+                        try self.stack.append(gpa, payload.close);
+                        try self.appendItems(gpa, payload.items.items, payload.seps.items);
+                        try self.stack.append(gpa, payload.open);
+                        try self.stack.append(gpa, payload.name);
+                    },
+                    else => @compileError(std.fmt.comptimePrint(
+                        "{} is not handled",
+                        .{tag},
+                    )),
+                }
             },
-            else => {},
         }
 
         return node;
