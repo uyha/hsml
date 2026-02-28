@@ -218,7 +218,7 @@ const State = struct {
             }
         };
 
-        try self.appendToken(.luastr_left);
+        try self.appendToken(.string_open);
         assert(self.len == 0);
 
         while (try self.peek()) |c| {
@@ -233,7 +233,7 @@ const State = struct {
                 }
             }
         } else {
-            try self.appendToken(.luastr_content);
+            try self.appendToken(.string_content);
         }
 
         return true;
@@ -249,11 +249,11 @@ const State = struct {
             if (try self.match(']')) {
                 if (close_level == level) {
                     self.len -= close_level + 2;
-                    try self.appendToken(.luastr_content);
+                    try self.appendToken(.string_content);
 
                     self.len = close_level + 2;
                     self.start.col -= self.len;
-                    try self.appendToken(.luastr_right);
+                    try self.appendToken(.string_close);
 
                     return true;
                 }
@@ -385,21 +385,21 @@ test "Lua string" {
     defer scanner.deinit(gpa);
 
     try t.expectEqualDeep(&[_]Token{
-        .{ .type = .luastr_left, .pos = 0, .len = 2, .cursor = .{ .line = 0, .col = 0 } },
-        .{ .type = .luastr_content, .pos = 2, .len = 0, .cursor = .{ .line = 0, .col = 2 } },
-        .{ .type = .luastr_right, .pos = 2, .len = 2, .cursor = .{ .line = 0, .col = 2 } },
-        .{ .type = .luastr_left, .pos = 5, .len = 3, .cursor = .{ .line = 1, .col = 0 } },
-        .{ .type = .luastr_content, .pos = 8, .len = 0, .cursor = .{ .line = 1, .col = 3 } },
-        .{ .type = .luastr_right, .pos = 8, .len = 3, .cursor = .{ .line = 1, .col = 3 } },
-        .{ .type = .luastr_left, .pos = 12, .len = 3, .cursor = .{ .line = 2, .col = 0 } },
-        .{ .type = .luastr_content, .pos = 15, .len = 3, .cursor = .{ .line = 2, .col = 3 } },
-        .{ .type = .luastr_right, .pos = 18, .len = 3, .cursor = .{ .line = 2, .col = 6 } },
-        .{ .type = .luastr_left, .pos = 22, .len = 4, .cursor = .{ .line = 3, .col = 0 } },
-        .{ .type = .luastr_content, .pos = 26, .len = 6, .cursor = .{ .line = 3, .col = 4 } },
-        .{ .type = .luastr_right, .pos = 32, .len = 4, .cursor = .{ .line = 3, .col = 10 } },
-        .{ .type = .luastr_left, .pos = 37, .len = 4, .cursor = .{ .line = 4, .col = 0 } },
-        .{ .type = .luastr_content, .pos = 41, .len = 8, .cursor = .{ .line = 4, .col = 4 } },
-        .{ .type = .luastr_right, .pos = 49, .len = 4, .cursor = .{ .line = 4, .col = 12 } },
+        .{ .type = .string_open, .pos = 0, .len = 2, .cursor = .{ .line = 0, .col = 0 } },
+        .{ .type = .string_content, .pos = 2, .len = 0, .cursor = .{ .line = 0, .col = 2 } },
+        .{ .type = .string_close, .pos = 2, .len = 2, .cursor = .{ .line = 0, .col = 2 } },
+        .{ .type = .string_open, .pos = 5, .len = 3, .cursor = .{ .line = 1, .col = 0 } },
+        .{ .type = .string_content, .pos = 8, .len = 0, .cursor = .{ .line = 1, .col = 3 } },
+        .{ .type = .string_close, .pos = 8, .len = 3, .cursor = .{ .line = 1, .col = 3 } },
+        .{ .type = .string_open, .pos = 12, .len = 3, .cursor = .{ .line = 2, .col = 0 } },
+        .{ .type = .string_content, .pos = 15, .len = 3, .cursor = .{ .line = 2, .col = 3 } },
+        .{ .type = .string_close, .pos = 18, .len = 3, .cursor = .{ .line = 2, .col = 6 } },
+        .{ .type = .string_open, .pos = 22, .len = 4, .cursor = .{ .line = 3, .col = 0 } },
+        .{ .type = .string_content, .pos = 26, .len = 6, .cursor = .{ .line = 3, .col = 4 } },
+        .{ .type = .string_close, .pos = 32, .len = 4, .cursor = .{ .line = 3, .col = 10 } },
+        .{ .type = .string_open, .pos = 37, .len = 4, .cursor = .{ .line = 4, .col = 0 } },
+        .{ .type = .string_content, .pos = 41, .len = 8, .cursor = .{ .line = 4, .col = 4 } },
+        .{ .type = .string_close, .pos = 49, .len = 4, .cursor = .{ .line = 4, .col = 12 } },
         .{ .type = .eof, .pos = 54, .len = 0, .cursor = .{ .line = 5, .col = 0 } },
     }, scanner.tokens.items);
 }

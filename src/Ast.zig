@@ -21,7 +21,7 @@ pub const Node = union(enum) {
     guards: Many,
     guard: Guard,
 
-    parameter: Parameter,
+    map: Map,
 
     identifier: Token,
     colon: Token,
@@ -32,16 +32,31 @@ pub const Node = union(enum) {
     @"const": Token,
     @"volatile": Token,
 
+    string: String,
+    string_open: Token,
+    string_content: Token,
+    string_close: Token,
+
     unexpected: Token,
     missing: Token.Type,
 
     eof: Token,
 };
 
+pub const String = struct {
+    open: usize,
+    content: usize,
+    close: usize,
+};
+pub const Map = struct {
+    name: usize,
+    string: usize,
+};
+
 pub const Root = struct {
     name: ?usize,
-    brace_left: usize,
-    brace_right: usize,
+    open: usize,
+    close: usize,
 
     items: std.ArrayList(usize) = .empty,
     seps: std.ArrayList(usize) = .empty,
@@ -49,40 +64,21 @@ pub const Root = struct {
 
 pub const Many = struct {
     name: usize,
-    brace_left: usize,
-    brace_right: usize,
+    open: usize,
+    close: usize,
 
     items: std.ArrayList(usize) = .empty,
     seps: std.ArrayList(usize) = .empty,
 };
 
-pub const Resource = struct {
-    name: usize,
-    colon: usize,
-    star: ?usize,
-    @"const": ?usize,
-    @"volatile": ?usize,
-    type: usize,
+pub const Resource = union(enum) {
+    map: usize,
+    many: Many,
 };
-
-pub const Guard = struct {
-    pub const Bare = struct {
-        paren_left: usize,
-        paren_right: usize,
-    };
-    pub const Lang = struct {};
-    pub const Body = union(enum) {
-        bare: Bare,
-        lang: Lang,
-    };
-
-    name: usize,
-    body: Body,
+pub const Guard = union(enum) {
+    map: usize,
+    many: Many,
 };
-
-pub const FunctionCall = struct {};
-
-pub const Parameter = struct {};
 
 pub fn parse(
     arena: std.mem.Allocator,
@@ -171,6 +167,13 @@ const State = struct {
         }
         return try self.missing(expected);
     }
+    fn string(self: *State) Error!?usize {
+        return try self.append(.{ .string = .{
+            .open = try self.token(.string_open) orelse return null,
+            .content = try self.tokenOrMissing(.string_content),
+            .close = try self.tokenOrMissing(.string_close),
+        } });
+    }
 
     fn root(self: *State) Error!usize {
         const config: ManyConfig = .{
@@ -183,8 +186,8 @@ const State = struct {
 
         return try self.append(.{ .root = .{
             .name = name,
-            .brace_left = result.open,
-            .brace_right = result.close,
+            .open = result.open,
+            .close = result.close,
 
             .items = result.items,
             .seps = result.seps,
@@ -218,22 +221,15 @@ const State = struct {
             if (try self.named(@tagName(match.tag))) |name| {
                 const result = try self.many(config, match.child);
 
-                return try self.append(@unionInit(Node, @tagName(match.tag), .{
-                    .name = name,
-                    .brace_left = result.open,
-                    .brace_right = result.close,
-
-                    .items = result.items,
-                    .seps = result.seps,
-                }));
+                return try self.append(@unionInit(
+                    Node,
+                    @tagName(match.tag),
+                    result.of(name),
+                ));
             }
         }
 
         return null;
-    }
-    fn Name(comptime tag: std.meta.Tag(Node)) type {
-        const Payload = @FieldType(Node, @tagName(tag));
-        return @FieldType(Payload, "name");
     }
     const ManyConfig = struct {
         open: Token.Type,
@@ -245,6 +241,17 @@ const State = struct {
         close: usize,
         items: std.ArrayList(usize),
         seps: std.ArrayList(usize),
+
+        fn of(self: ManyResult, name: usize) Many {
+            return .{
+                .name = name,
+                .open = self.open,
+                .close = self.close,
+
+                .items = self.items,
+                .seps = self.seps,
+            };
+        }
     };
     fn many(
         self: *State,
@@ -288,14 +295,7 @@ const State = struct {
     }
 
     fn resource(self: *State) Error!?usize {
-        return try self.append(.{ .resource = .{
-            .name = try self.token(.identifier) orelse return null,
-            .colon = try self.tokenOrMissing(.colon),
-            .star = try self.token(.star),
-            .@"const" = try self.token(.@"const"),
-            .@"volatile" = try self.token(.@"volatile"),
-            .type = try self.tokenOrMissing(.identifier),
-        } });
+        return self.mapOrMany(.resource);
     }
     fn event(self: *State) Error!?usize {
         const current = self.currentToken();
@@ -304,11 +304,35 @@ const State = struct {
         }
 
         self.current += 1;
-        return try self.append(@unionInit(Node, "event", current));
+        return try self.append(.{ .event = current });
     }
     fn guard(self: *State) Error!?usize {
-        _ = self;
-        return null;
+        return self.mapOrMany(.guard);
+    }
+    fn mapOrMany(self: *State, comptime tag: std.meta.Tag(Node)) Error!?usize {
+        const name = try self.token(.identifier) orelse return null;
+
+        if (try self.string()) |string_index| {
+            const index = try self.append(.{ .map = .{
+                .name = name,
+                .string = string_index,
+            } });
+            return try self.append(@unionInit(Node, @tagName(tag), .{ .map = index }));
+        }
+
+        const many_result = try self.many(
+            .{ .open = .brace_left, .close = .brace_right, .seperator = .comma },
+            map,
+        );
+        return try self.append(@unionInit(Node, @tagName(tag), .{
+            .many = many_result.of(name),
+        }));
+    }
+    fn map(self: *State) Error!?usize {
+        return try self.append(.{ .map = .{
+            .name = try self.token(.identifier) orelse return null,
+            .string = try self.string() orelse return null,
+        } });
     }
 };
 
@@ -316,10 +340,10 @@ pub const Iterator = struct {
     stack: std.ArrayList(usize) = .empty,
     nodes: []const Node,
 
-    pub fn init(gpa: Allocator, stack: []const usize, nodes: []const Node) Allocator.Error!Iterator {
+    pub fn init(gpa: Allocator, initial: []const usize, nodes: []const Node) Allocator.Error!Iterator {
         var result: Iterator = .{ .nodes = nodes };
 
-        for (stack) |item| {
+        for (initial) |item| {
             try result.stack.append(gpa, item);
         }
 
@@ -331,49 +355,64 @@ pub const Iterator = struct {
 
         switch (node) {
             .root => |payload| {
-                try self.stack.append(gpa, payload.brace_right);
-                try self.appendItemsCommas(
-                    gpa,
-                    payload.items.items,
-                    payload.seps.items,
-                );
-                try self.stack.append(gpa, payload.brace_left);
+                try self.stack.append(gpa, payload.close);
+                try self.appendItems(gpa, payload.items.items, payload.seps.items);
+                try self.stack.append(gpa, payload.open);
                 if (payload.name) |name| {
                     try self.stack.append(gpa, name);
                 }
             },
             .resources => |payload| {
-                try self.stack.append(gpa, payload.brace_right);
-                try self.appendItemsCommas(
-                    gpa,
-                    payload.items.items,
-                    payload.seps.items,
-                );
-                try self.stack.append(gpa, payload.brace_left);
+                try self.stack.append(gpa, payload.close);
+                try self.appendItems(gpa, payload.items.items, payload.seps.items);
+                try self.stack.append(gpa, payload.open);
                 try self.stack.append(gpa, payload.name);
             },
             .resource => |payload| {
-                try self.stack.append(gpa, payload.type);
-                if (payload.@"volatile") |i| {
-                    try self.stack.append(gpa, i);
+                switch (payload) {
+                    .map => |map| {
+                        try self.stack.append(gpa, map);
+                    },
+                    .many => |many| {
+                        try self.stack.append(gpa, many.close);
+                        try self.appendItems(gpa, many.items.items, many.seps.items);
+                        try self.stack.append(gpa, many.open);
+                        try self.stack.append(gpa, many.name);
+                    },
                 }
-                if (payload.@"const") |i| {
-                    try self.stack.append(gpa, i);
-                }
-                if (payload.star) |i| {
-                    try self.stack.append(gpa, i);
-                }
-                try self.stack.append(gpa, payload.colon);
-                try self.stack.append(gpa, payload.name);
             },
             .events => |payload| {
-                try self.stack.append(gpa, payload.brace_right);
-                try self.appendItemsCommas(
-                    gpa,
-                    payload.items.items,
-                    payload.seps.items,
-                );
-                try self.stack.append(gpa, payload.brace_left);
+                try self.stack.append(gpa, payload.close);
+                try self.appendItems(gpa, payload.items.items, payload.seps.items);
+                try self.stack.append(gpa, payload.open);
+                try self.stack.append(gpa, payload.name);
+            },
+            .guards => |payload| {
+                try self.stack.append(gpa, payload.close);
+                try self.appendItems(gpa, payload.items.items, payload.seps.items);
+                try self.stack.append(gpa, payload.open);
+                try self.stack.append(gpa, payload.name);
+            },
+            .guard => |payload| {
+                switch (payload) {
+                    .map => |map| {
+                        try self.stack.append(gpa, map);
+                    },
+                    .many => |many| {
+                        try self.stack.append(gpa, many.close);
+                        try self.appendItems(gpa, many.items.items, many.seps.items);
+                        try self.stack.append(gpa, many.open);
+                        try self.stack.append(gpa, many.name);
+                    },
+                }
+            },
+            .string => |payload| {
+                try self.stack.append(gpa, payload.close);
+                try self.stack.append(gpa, payload.content);
+                try self.stack.append(gpa, payload.open);
+            },
+            .map => |payload| {
+                try self.stack.append(gpa, payload.string);
                 try self.stack.append(gpa, payload.name);
             },
             else => {},
@@ -382,22 +421,22 @@ pub const Iterator = struct {
         return node;
     }
 
-    fn appendItemsCommas(
+    fn appendItems(
         self: *Iterator,
         gpa: Allocator,
         items: []const usize,
-        commas: []const usize,
+        seps: []const usize,
     ) Allocator.Error!void {
-        assert(items.len == commas.len or items.len == commas.len + 1);
+        assert(items.len == seps.len or items.len == seps.len + 1);
 
-        if (items.len == commas.len + 1) {
+        if (items.len == seps.len + 1) {
             try self.stack.append(gpa, items[items.len - 1]);
         }
 
-        var bound = commas.len;
+        var bound = seps.len;
         while (bound > 0) : (bound -= 1) {
             const i = bound - 1;
-            try self.stack.append(gpa, commas[i]);
+            try self.stack.append(gpa, seps[i]);
             try self.stack.append(gpa, items[i]);
         }
     }

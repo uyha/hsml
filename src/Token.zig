@@ -25,9 +25,9 @@ pub const Type = enum {
     underscore,
     identifier,
 
-    luastr_left,
-    luastr_content,
-    luastr_right,
+    string_open,
+    string_content,
+    string_close,
 
     eof,
 

@@ -1,7 +1,7 @@
 simple {
   resources {
-    motor: *Motor,
-    road: *const road,
+    motor [[*Motor]],
+    road [[*const road]],
   },
 
   states {
@@ -13,7 +13,7 @@ simple {
   events {red, yellow, green, speed},
 
   guards {
-    has_pedestrian(self.road),
+    has_pedestrian [[self.road.has_pedestrian()]],
     has_fuel {
       zig [[has_fuel(self.motor)]],
       cpp [[nope()]],
@@ -21,11 +21,11 @@ simple {
   },
 
   actions {
-    harsh_stop(self.motor),
-    soft_stop(self.motor),
+    harsh_stop [[self.motor.harsh_stop()]],
+    soft_stop [[self.motor.soft_stop()]],
     accelerate {
-      zig [[accelerate(self.motor)]],
-      cpp [[accelerate(this->motor)]],
+      zig [[self.motor.accelerate()]],
+      cpp [[this->motor.accelerate()]],
     },
   },
 

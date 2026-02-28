@@ -40,10 +40,47 @@ fn parse(init: Init) !void {
     var reader: std.Io.Reader = .fixed(
         \\simple {
         \\  resources {
-        \\    motor: *Motor,
-        \\    road: *const road,
+        \\    motor [[*Motor]],
+        \\    road {
+        \\      zig [[*const road]],
+        \\      cpp [[road const &]],
+        \\    }
         \\  },
+        \\
+        // \\  states {
+        // \\    running from [[running.hsml]],
+        // \\    pausing,
+        // \\    accelerating,
+        // \\  },
+        \\
         \\  events {red, yellow, green, speed},
+        \\
+        \\  guards {
+        \\    has_pedestrian [[self.road.has_pedestrian()]],
+        \\    has_fuel {
+        \\      zig [[has_fuel(self.motor)]],
+        \\      cpp [[nope()]],
+        \\    }
+        \\  },
+        // \\
+        // \\  actions {
+        // \\    harsh_stop [[self.motor.harsh_stop()]],
+        // \\    soft_stop [[self.motor.soft_stop()]],
+        // \\    accelerate {
+        // \\      zig [[self.motor.accelerate()]],
+        // \\      cpp [[this->motor.accelerate()]],
+        // \\    },
+        // \\  },
+        // \\
+        // \\  transitions {
+        // \\   *(pausing, green) if (not has_pedestrian) invoke (accelerate) -> accelerating,
+        // \\
+        // \\    (running, red) invoke (harsh_stop) -> pausing,
+        // \\    (running, yellow) invoke (soft_stop) -> pausing,
+        // \\    (running, green) if (has_pedestrian) invoke (harsh_stop) -> pausing,
+        // \\
+        // \\    (accelerating,  speed) if (stable_speed) -> running,
+        // \\  },
         \\}
     );
     var scanner: Scanner = try .scan(arena, &reader);
@@ -61,21 +98,26 @@ fn parse(init: Init) !void {
         while (try iter.next(arena)) |node| {
             std.debug.print("{}\n", .{node});
         }
+        std.debug.print("\n", .{});
     }
 
     const content = scanner.content.items;
-
-    var iter = try ast.iterator(arena);
-    while (try iter.next(arena)) |node| {
-        switch (node) {
-            inline else => |payload| {
-                if (@TypeOf(payload) == hsml.Token) {
-                    std.debug.print("{s} ", .{payload.lexeme(content)});
-                }
-            },
+    {
+        var iter = try ast.iterator(arena);
+        while (try iter.next(arena)) |node| {
+            switch (node) {
+                inline else => |payload| {
+                    if (@TypeOf(payload) == hsml.Token) {
+                        if (payload.type == .eof) {
+                            std.debug.print("<eof>\n", .{});
+                        } else {
+                            std.debug.print("{s} ", .{payload.lexeme(content)});
+                        }
+                    }
+                },
+            }
         }
     }
-    std.debug.print("\n", .{});
 
     // const scanned = scanner.tokens.items;
     // const parsed = tokens.items;
