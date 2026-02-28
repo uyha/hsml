@@ -71,16 +71,16 @@ fn parse(init: Init) !void {
         \\      cpp [[this->motor.accelerate()]],
         \\    },
         \\  },
-        // \\
-        // \\  transitions {
-        // \\   *(pausing, green) if (not has_pedestrian) invoke (accelerate) -> accelerating,
-        // \\
-        // \\    (running, red) invoke (harsh_stop) -> pausing,
-        // \\    (running, yellow) invoke (soft_stop) -> pausing,
-        // \\    (running, green) if (has_pedestrian) invoke (harsh_stop) -> pausing,
-        // \\
-        // \\    (accelerating,  speed) if (stable_speed) -> running,
-        // \\  },
+        \\
+        \\  transitions {
+        \\   *(pausing, green) if (has_pedestrian) invoke (accelerate) -> accelerating,
+        \\
+        \\    (running, red) invoke (harsh_stop) -> pausing,
+        \\    (running, yellow) invoke (soft_stop) -> pausing,
+        \\    (running, green) if (has_pedestrian) invoke (harsh_stop) -> pausing,
+        \\
+        \\    (accelerating, speed) if (stable_speed) -> running,
+        \\  },
         \\}
     );
     var scanner: Scanner = try .scan(arena, &reader);

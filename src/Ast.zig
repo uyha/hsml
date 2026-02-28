@@ -35,14 +35,26 @@ pub const Node = union(enum) {
 
     map: Map,
 
+    transitions: Many,
+    transition: Transition,
+    transition_from: Transition.From,
+    transition_to: Transition.To,
+    transition_guard: Many,
+    transition_action: Many,
+
     identifier: Token,
     colon: Token,
     brace_left: Token,
     brace_right: Token,
+    paren_left: Token,
+    paren_right: Token,
     comma: Token,
     star: Token,
     @"const": Token,
     @"volatile": Token,
+    @"if": Token,
+    invoke: Token,
+    arrow: Token,
 
     string: String,
     string_open: Token,
@@ -81,6 +93,24 @@ pub const Many = struct {
 
     items: std.ArrayList(usize) = .empty,
     seps: std.ArrayList(usize) = .empty,
+};
+
+pub const Transition = struct {
+    star: ?usize,
+    from: usize,
+    to: ?usize,
+    guard: ?usize,
+    action: ?usize,
+
+    pub const From = struct {
+        open: usize,
+        close: usize,
+
+        state: usize,
+        comma: usize,
+        event: usize,
+    };
+    pub const To = struct { arrow: usize, name: usize };
 };
 
 pub fn parse(
@@ -170,6 +200,9 @@ const State = struct {
         }
         return try self.missing(expected);
     }
+    fn identifier(self: *State) Error!?usize {
+        return try self.token(.identifier);
+    }
     fn string(self: *State) Error!?usize {
         return try self.append(.{ .string = .{
             .open = try self.token(.string_open) orelse return null,
@@ -220,6 +253,7 @@ const State = struct {
             .{ .tag = .events, .child = event },
             .{ .tag = .guards, .child = guard },
             .{ .tag = .actions, .child = action },
+            .{ .tag = .transitions, .child = transition },
         };
         inline for (matches) |match| {
             if (try self.named(@tagName(match.tag))) |name| {
@@ -315,6 +349,46 @@ const State = struct {
     }
     fn action(self: *State) Error!?usize {
         return self.mapOrMany(.action);
+    }
+    fn transition(self: *State) Error!?usize {
+        return try self.append(.{ .transition = .{
+            .star = try self.token(.star),
+            .from = try self.transitionFrom() orelse try self.missing(.paren_left),
+            .guard = try self.transitionGuard(),
+            .action = try self.transitionAction(),
+            .to = try self.transitionTo(),
+        } });
+    }
+    fn transitionFrom(self: *State) Error!?usize {
+        return try self.append(.{ .transition_from = .{
+            .open = try self.token(.paren_left) orelse return null,
+            .state = try self.tokenOrMissing(.identifier),
+            .comma = try self.tokenOrMissing(.comma),
+            .event = try self.tokenOrMissing(.identifier),
+            .close = try self.tokenOrMissing(.paren_right),
+        } });
+    }
+    fn transitionGuard(self: *State) Error!?usize {
+        const name = try self.token(.@"if") orelse return null;
+        const content = try self.many(
+            .{ .open = .paren_left, .close = .paren_right, .seperator = .comma },
+            identifier,
+        );
+        return try self.append(.{ .transition_guard = content.of(name) });
+    }
+    fn transitionAction(self: *State) Error!?usize {
+        const name = try self.token(.invoke) orelse return null;
+        const content = try self.many(
+            .{ .open = .paren_left, .close = .paren_right, .seperator = .comma },
+            identifier,
+        );
+        return try self.append(.{ .transition_guard = content.of(name) });
+    }
+    fn transitionTo(self: *State) Error!?usize {
+        return try self.append(.{ .transition_to = .{
+            .arrow = try self.token(.arrow) orelse return null,
+            .name = try self.tokenOrMissing(.identifier),
+        } });
     }
     fn mapOrMany(self: *State, comptime tag: std.meta.Tag(Node)) Error!?usize {
         const name = try self.token(.identifier) orelse return null;
@@ -412,6 +486,12 @@ pub const Iterator = struct {
                         try self.stack.append(gpa, many.name);
                     },
                 }
+            },
+            .transitions => |payload| {
+                try self.stack.append(gpa, payload.close);
+                try self.appendItems(gpa, payload.items.items, payload.seps.items);
+                try self.stack.append(gpa, payload.open);
+                try self.stack.append(gpa, payload.name);
             },
             .string => |payload| {
                 try self.stack.append(gpa, payload.close);
