@@ -582,9 +582,6 @@ test {
         \\      cpp [[this->motor.accelerate()]],
         \\    },
         \\  },
-        \\  entry {
-        \\    (pausing, _) call (),
-        \\  }
         \\
         \\  transitions {
         \\   *(pausing, green) when (has_pedestrian) call (accelerate) goto accelerating,

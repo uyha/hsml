@@ -42,8 +42,8 @@ fn parse(init: Init) !void {
         \\  resources {
         \\    motor [[*Motor]],
         \\    road {
-        \\      zig [[*const road]],
-        \\      cpp [[road const &]],
+        \\      zig [[*const Road]],
+        \\      cpp [[Road const &]],
         \\    }
         \\  },
         \\
@@ -75,9 +75,9 @@ fn parse(init: Init) !void {
         \\  transitions {
         \\   *(pausing, green) when (has_pedestrian) call (accelerate) goto accelerating,
         \\
-        \\    (running, red)    call (harsh_stop) goto pausing,
+        \\    (running, red) call (harsh_stop) goto pausing,
         \\    (running, yellow) call (soft_stop) goto pausing,
-        \\    (running, green)  when (has_pedestrian) call (harsh_stop) goto pausing,
+        \\    (running, green) when (has_pedestrian) call (harsh_stop) goto pausing,
         \\
         \\    (_, speed) when (stable_speed) goto running,
         \\  },

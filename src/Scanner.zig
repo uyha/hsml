@@ -89,7 +89,6 @@ const State = struct {
                 inline for ([_]struct { []const u8, Token.Type }{
                     .{ "when", .when },
                     .{ "call", .call },
-                    .{ "self", .self },
                     .{ "goto", .goto },
                     .{ "from", .from },
                     .{ "not", .not },
@@ -301,30 +300,28 @@ test "Multi character tokens" {
     const gpa = t.allocator;
 
     var reader: std.Io.Reader = .fixed(
-        \\->:->->
-        \\ if const  volatile  invoke
+        \\goto:goto goto
+        \\ when call
         \\   self from
     );
     var scanner: Scanner = try .scan(gpa, &reader);
     defer scanner.deinit(gpa);
 
     try t.expectEqualDeep(&[_]Token{
-        .{ .type = .arrow, .pos = 0, .len = 2, .cursor = .{ .line = 0, .col = 0 } },
-        .{ .type = .colon, .pos = 2, .len = 1, .cursor = .{ .line = 0, .col = 2 } },
-        .{ .type = .arrow, .pos = 3, .len = 2, .cursor = .{ .line = 0, .col = 3 } },
-        .{ .type = .arrow, .pos = 5, .len = 2, .cursor = .{ .line = 0, .col = 5 } },
-        .{ .type = .when, .pos = 9, .len = 2, .cursor = .{ .line = 1, .col = 1 } },
-        .{ .type = .@"const", .pos = 12, .len = 5, .cursor = .{ .line = 1, .col = 4 } },
-        .{ .type = .@"volatile", .pos = 19, .len = 8, .cursor = .{ .line = 1, .col = 11 } },
-        .{ .type = .invoke, .pos = 29, .len = 6, .cursor = .{ .line = 1, .col = 21 } },
-        .{ .type = .self, .pos = 39, .len = 4, .cursor = .{ .line = 2, .col = 3 } },
-        .{ .type = .from, .pos = 44, .len = 4, .cursor = .{ .line = 2, .col = 8 } },
-        .{ .type = .eof, .pos = 48, .len = 0, .cursor = .{ .line = 2, .col = 12 } },
+        .{ .type = .goto, .pos = 0, .len = 4, .cursor = .{ .line = 0, .col = 0 } },
+        .{ .type = .colon, .pos = 4, .len = 1, .cursor = .{ .line = 0, .col = 4 } },
+        .{ .type = .goto, .pos = 5, .len = 4, .cursor = .{ .line = 0, .col = 5 } },
+        .{ .type = .goto, .pos = 10, .len = 4, .cursor = .{ .line = 0, .col = 10 } },
+        .{ .type = .when, .pos = 16, .len = 4, .cursor = .{ .line = 1, .col = 1 } },
+        .{ .type = .call, .pos = 21, .len = 4, .cursor = .{ .line = 1, .col = 6 } },
+        .{ .type = .identifier, .pos = 29, .len = 4, .cursor = .{ .line = 2, .col = 3 } },
+        .{ .type = .from, .pos = 34, .len = 4, .cursor = .{ .line = 2, .col = 8 } },
+        .{ .type = .eof, .pos = 38, .len = 0, .cursor = .{ .line = 2, .col = 12 } },
     }, scanner.tokens.items);
-    try t.expectEqualStrings("->", scanner.tokens.items[0].lexeme(scanner.content.items));
-    try t.expectEqualStrings("if", scanner.tokens.items[4].lexeme(scanner.content.items));
-    try t.expectEqualStrings("self", scanner.tokens.items[8].lexeme(scanner.content.items));
-    try t.expectEqualStrings("from", scanner.tokens.items[9].lexeme(scanner.content.items));
+    try t.expectEqualStrings("goto", scanner.tokens.items[0].lexeme(scanner.content.items));
+    try t.expectEqualStrings("when", scanner.tokens.items[4].lexeme(scanner.content.items));
+    try t.expectEqualStrings("self", scanner.tokens.items[6].lexeme(scanner.content.items));
+    try t.expectEqualStrings("from", scanner.tokens.items[7].lexeme(scanner.content.items));
 }
 test "Single identifier" {
     const gpa = t.allocator;

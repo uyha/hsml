@@ -13,7 +13,6 @@ pub const Type = enum {
     when,
     from,
     call,
-    self,
     not,
     goto,
     @"and",
