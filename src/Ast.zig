@@ -558,13 +558,15 @@ test {
         \\    }
         \\  },
         \\
-        \\  states {
-        \\    running from [[running.hsml]],
-        \\    pausing,
-        \\    accelerating,
+        \\  events {
+        \\    red [[Red]],
+        \\    yellow [[Yellow]],
+        \\    green [[Green]],
+        \\    speed {
+        \\      zig [[Speed]],
+        \\      cpp [[Speed]]
+        \\    }
         \\  },
-        \\
-        \\  events {red [[Red]], yellow [[Yellow]], green [[Green]], speed [[Speed]]},
         \\
         \\  guards {
         \\    has_pedestrian [[self.road.has_pedestrian()]],
@@ -581,6 +583,12 @@ test {
         \\      zig [[self.motor.accelerate()]],
         \\      cpp [[this->motor.accelerate()]],
         \\    },
+        \\  },
+        \\
+        \\  states {
+        \\    running from [[running.hsml]],
+        \\    pausing,
+        \\    accelerating,
         \\  },
         \\
         \\  transitions {
