@@ -10,15 +10,12 @@ pub const Type = enum {
     comma,
     dot,
 
-    arrow,
-
-    @"const",
-    @"volatile",
-    @"if",
+    when,
     from,
-    invoke,
+    call,
     self,
     not,
+    goto,
     @"and",
     @"or",
 

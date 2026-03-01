@@ -67,9 +67,6 @@ const State = struct {
             ')' => try self.appendToken(.paren_right),
             ',' => try self.appendToken(.comma),
             '.' => try self.appendToken(.dot),
-            '-' => if (try self.match('>')) {
-                try self.appendToken(.arrow);
-            },
             '_' => {
                 if (!try self.identifier()) {
                     try self.appendToken(.underscore);
@@ -90,11 +87,10 @@ const State = struct {
             },
             else => {
                 inline for ([_]struct { []const u8, Token.Type }{
-                    .{ "if", .@"if" },
-                    .{ "const", .@"const" },
-                    .{ "volatile", .@"volatile" },
-                    .{ "invoke", .invoke },
+                    .{ "when", .when },
+                    .{ "call", .call },
                     .{ "self", .self },
+                    .{ "goto", .goto },
                     .{ "from", .from },
                     .{ "not", .not },
                     .{ "and", .@"and" },
@@ -317,7 +313,7 @@ test "Multi character tokens" {
         .{ .type = .colon, .pos = 2, .len = 1, .cursor = .{ .line = 0, .col = 2 } },
         .{ .type = .arrow, .pos = 3, .len = 2, .cursor = .{ .line = 0, .col = 3 } },
         .{ .type = .arrow, .pos = 5, .len = 2, .cursor = .{ .line = 0, .col = 5 } },
-        .{ .type = .@"if", .pos = 9, .len = 2, .cursor = .{ .line = 1, .col = 1 } },
+        .{ .type = .when, .pos = 9, .len = 2, .cursor = .{ .line = 1, .col = 1 } },
         .{ .type = .@"const", .pos = 12, .len = 5, .cursor = .{ .line = 1, .col = 4 } },
         .{ .type = .@"volatile", .pos = 19, .len = 8, .cursor = .{ .line = 1, .col = 11 } },
         .{ .type = .invoke, .pos = 29, .len = 6, .cursor = .{ .line = 1, .col = 21 } },

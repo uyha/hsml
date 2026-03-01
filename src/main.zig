@@ -73,13 +73,13 @@ fn parse(init: Init) !void {
         \\  },
         \\
         \\  transitions {
-        \\   *(pausing, green) if (has_pedestrian) invoke (accelerate) -> accelerating,
+        \\   *(pausing, green) when (has_pedestrian) call (accelerate) goto accelerating,
         \\
-        \\    (running, red) invoke (harsh_stop) -> pausing,
-        \\    (running, yellow) invoke (soft_stop) -> pausing,
-        \\    (running, green) if (has_pedestrian) invoke (harsh_stop) -> pausing,
+        \\    (running, red)    call (harsh_stop) goto pausing,
+        \\    (running, yellow) call (soft_stop) goto pausing,
+        \\    (running, green)  when (has_pedestrian) call (harsh_stop) goto pausing,
         \\
-        \\    (_, speed) if (stable_speed) -> running,
+        \\    (_, speed) when (stable_speed) goto running,
         \\  },
         \\}
     );

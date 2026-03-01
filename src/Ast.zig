@@ -61,16 +61,14 @@ pub const Node = union(enum) {
     transition_guard: Many,
     transition_action: Many,
 
-    @"const": Token,
-    @"if": Token,
-    @"volatile": Token,
-    arrow: Token,
+    when: Token,
+    goto: Token,
     brace_left: Token,
     brace_right: Token,
     colon: Token,
     comma: Token,
     identifier: Token,
-    invoke: Token,
+    call: Token,
     paren_left: Token,
     paren_right: Token,
     star: Token,
@@ -126,7 +124,7 @@ pub const Transition = struct {
         event: usize,
     };
     pub const To = struct {
-        arrow: usize,
+        goto: usize,
         name: usize,
     };
 };
@@ -371,7 +369,7 @@ const State = struct {
         } });
     }
     fn transitionGuard(self: *State) Error!?usize {
-        const name = try self.token(.@"if") orelse return null;
+        const name = try self.token(.when) orelse return null;
         const content = try self.many(
             .{ .open = .paren_left, .close = .paren_right, .seperator = .comma },
             identifier,
@@ -379,7 +377,7 @@ const State = struct {
         return try self.append(.{ .transition_guard = content.of(name) });
     }
     fn transitionAction(self: *State) Error!?usize {
-        const name = try self.token(.invoke) orelse return null;
+        const name = try self.token(.call) orelse return null;
         const content = try self.many(
             .{ .open = .paren_left, .close = .paren_right, .seperator = .comma },
             identifier,
@@ -388,7 +386,7 @@ const State = struct {
     }
     fn transitionTo(self: *State) Error!?usize {
         return try self.append(.{ .transition_to = .{
-            .arrow = try self.token(.arrow) orelse return null,
+            .goto = try self.token(.goto) orelse return null,
             .name = try self.tokenOrMissing(.identifier),
         } });
     }
@@ -496,7 +494,7 @@ pub const Iterator = struct {
             },
             .transition_to => |payload| {
                 try self.stack.append(gpa, payload.name);
-                try self.stack.append(gpa, payload.arrow);
+                try self.stack.append(gpa, payload.goto);
             },
             .string => |payload| {
                 try self.stack.append(gpa, payload.close);
@@ -555,8 +553,8 @@ test {
         \\  resources {
         \\    motor [[*Motor]],
         \\    road {
-        \\      zig [[*const road]],
-        \\      cpp [[road const &]],
+        \\      zig [[*const Road]],
+        \\      cpp [[Road const &]],
         \\    }
         \\  },
         \\
@@ -584,15 +582,18 @@ test {
         \\      cpp [[this->motor.accelerate()]],
         \\    },
         \\  },
+        \\  entry {
+        \\    (pausing, _) call (),
+        \\  }
         \\
         \\  transitions {
-        \\   *(pausing, green) if (has_pedestrian) invoke (accelerate) -> accelerating,
+        \\   *(pausing, green) when (has_pedestrian) call (accelerate) goto accelerating,
         \\
-        \\    (running, red) invoke (harsh_stop) -> pausing,
-        \\    (running, yellow) invoke (soft_stop) -> pausing,
-        \\    (running, green) if (has_pedestrian) invoke (harsh_stop) -> pausing,
+        \\    (running, red) call (harsh_stop) goto pausing,
+        \\    (running, yellow) call (soft_stop) goto pausing,
+        \\    (running, green) when (has_pedestrian) call (harsh_stop) goto pausing,
         \\
-        \\    (_, speed) if (stable_speed) -> running,
+        \\    (_, speed) when (stable_speed) goto running,
         \\  },
         \\}
     );
