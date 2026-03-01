@@ -363,7 +363,7 @@ const State = struct {
     }
     fn transitionFrom(self: *State) Error!?usize {
         return try self.append(.{ .transition_from = .{
-            .open = try self.token(.paren_left) orelse return null,
+            .open = try self.token(.paren_left) orelse return try self.unexpected(),
             .state = try self.token(.identifier) orelse try self.tokenOrMissing(.underscore),
             .comma = try self.tokenOrMissing(.comma),
             .event = try self.token(.identifier) orelse try self.tokenOrMissing(.underscore),
