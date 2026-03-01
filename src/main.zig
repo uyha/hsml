@@ -83,14 +83,14 @@ fn parse(init: Init) !void {
         \\  },
         \\}
     );
+    const scan_start = Clock.boot.now(init.io);
     var scanner: Scanner = try .scan(arena, &reader);
+    const scan_end = Clock.boot.now(init.io);
     defer scanner.deinit(arena);
 
-    const ast: Ast = try .parse(
-        arena,
-        scanner.content.items,
-        scanner.tokens.items,
-    );
+    const parse_start = Clock.boot.now(init.io);
+    const ast: Ast = try .parse(arena, scanner.content.items, scanner.tokens.items);
+    const parse_end = Clock.boot.now(init.io);
     std.debug.print("root: {}\n", .{ast.root});
 
     {
@@ -118,6 +118,9 @@ fn parse(init: Init) !void {
             }
         }
     }
+
+    std.debug.print("scanning took {}ns\n", .{scan_start.durationTo(scan_end).nanoseconds});
+    std.debug.print("parsing took {}ns\n", .{parse_start.durationTo(parse_end).nanoseconds});
 }
 
 const hsml = @import("hsml");
@@ -127,3 +130,4 @@ const Ast = hsml.Ast;
 const std = @import("std");
 const Init = std.process.Init;
 const Io = std.Io;
+const Clock = Io.Clock;
