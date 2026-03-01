@@ -9,6 +9,24 @@ pub fn iterator(self: *const Ast, gpa: Allocator) Allocator.Error!Iterator {
     return try .init(gpa, &.{ self.eof, self.root }, self.nodes.items);
 }
 
+pub fn parse(
+    arena: std.mem.Allocator,
+    content: []const u8,
+    tokens: []const Token,
+) Error!Ast {
+    var ast: Ast = .{ .root = undefined, .eof = undefined, .nodes = .empty };
+    var state: State = .{
+        .arena = arena,
+
+        .nodes = &ast.nodes,
+        .content = content,
+        .tokens = tokens,
+    };
+    ast.root = try state.root();
+    ast.eof = try state.eof();
+    return ast;
+}
+
 pub const Node = union(enum) {
     root: Root,
 
@@ -112,24 +130,6 @@ pub const Transition = struct {
         name: usize,
     };
 };
-
-pub fn parse(
-    arena: std.mem.Allocator,
-    content: []const u8,
-    tokens: []const Token,
-) Error!Ast {
-    var ast: Ast = .{ .root = undefined, .eof = undefined, .nodes = .empty };
-    var state: State = .{
-        .arena = arena,
-
-        .nodes = &ast.nodes,
-        .content = content,
-        .tokens = tokens,
-    };
-    ast.root = try state.root();
-    ast.eof = try state.eof();
-    return ast;
-}
 
 const State = struct {
     arena: Allocator,
