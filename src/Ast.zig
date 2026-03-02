@@ -244,22 +244,18 @@ const State = struct {
         return try self.missing(.eof);
     }
     fn component(self: *State) Error!?usize {
-        const Match = struct {
-            tag: std.meta.Tag(Node),
-            child: fn (self: *State) Error!?usize,
-        };
-        const config: ManyConfig = .{
-            .open = .brace_left,
-            .close = .brace_right,
-            .seperator = .comma,
-        };
-        const matches: []const Match = &.{
+        const matches = &.{
             .{ .tag = .resources, .child = map },
             .{ .tag = .states, .child = state },
             .{ .tag = .events, .child = map },
             .{ .tag = .guards, .child = map },
             .{ .tag = .actions, .child = map },
             .{ .tag = .transitions, .child = transition },
+        };
+        const config: ManyConfig = .{
+            .open = .brace_left,
+            .close = .brace_right,
+            .seperator = .comma,
         };
         inline for (matches) |match| {
             if (try self.named(@tagName(match.tag))) |name| {
@@ -586,13 +582,15 @@ test {
         \\  },
         \\
         \\  states {
-        \\    running from [[running.hsml]],
+        \\    running,
         \\    pausing,
         \\    accelerating,
         \\  },
         \\
         \\  transitions {
-        \\   *(pausing, green) when (has_pedestrian) call (accelerate) goto accelerating,
+        \\   *(pausing, green) when (has_pedestrian)
+        \\                     call (accelerate)
+        \\                     goto accelerating,
         \\
         \\    (running, red) call (harsh_stop) goto pausing,
         \\    (running, yellow) call (soft_stop) goto pausing,
