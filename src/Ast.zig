@@ -22,13 +22,17 @@ pub fn parse(
         .content = content,
         .tokens = tokens,
     };
-    ast.root = try state.root();
+    ast.root = try state.state() orelse try state.missing(.brace_left);
     ast.eof = try state.eof();
     return ast;
 }
 
 pub const Node = union(enum) {
-    root: Root,
+    state: union(enum) {
+        bare: usize,
+        import: struct { name: usize, from: usize, string: usize },
+        full: Many,
+    },
 
     bare: struct {
         name: usize,
@@ -40,14 +44,6 @@ pub const Node = union(enum) {
     },
 
     states: Many,
-    state: union(enum) {
-        bare: usize,
-        import: struct {
-            name: usize,
-            from: usize,
-            string: usize,
-        },
-    },
 
     resources: Many,
     events: Many,
@@ -88,15 +84,6 @@ pub const Node = union(enum) {
     missing: Token.Type,
 
     eof: Token,
-};
-
-pub const Root = struct {
-    name: ?usize,
-    open: usize,
-    close: usize,
-
-    items: std.ArrayList(usize) = .empty,
-    seps: std.ArrayList(usize) = .empty,
 };
 
 pub const Many = struct {
@@ -216,24 +203,6 @@ const State = struct {
         } });
     }
 
-    fn root(self: *State) Error!usize {
-        const config: ManyConfig = .{
-            .open = .brace_left,
-            .close = .brace_right,
-            .seperator = .comma,
-        };
-        const name = try self.token(.identifier);
-        const result = try self.many(config, component);
-
-        return try self.append(.{ .root = .{
-            .name = name,
-            .open = result.open,
-            .close = result.close,
-
-            .items = result.items,
-            .seps = result.seps,
-        } });
-    }
     fn eof(self: *State) Error!usize {
         const current = self.currentToken();
         if (current.type == .eof) {
@@ -242,6 +211,25 @@ const State = struct {
 
         self.current += 1;
         return try self.missing(.eof);
+    }
+
+    fn state(self: *State) Error!?usize {
+        const name = try self.identifier() orelse return null;
+
+        if (try self.token(.from)) |from| {
+            return try self.append(.{ .state = .{ .import = .{
+                .name = name,
+                .from = from,
+                .string = try self.string() orelse try self.missing(.string_open),
+            } } });
+        }
+
+        const result = try self.many(
+            .{ .open = .brace_left, .close = .brace_right, .seperator = .comma },
+            component,
+        );
+
+        return try self.append(.{ .state = .{ .full = result.of(name) } });
     }
     fn component(self: *State) Error!?usize {
         const matches = &.{
@@ -334,18 +322,6 @@ const State = struct {
         };
     }
 
-    fn state(self: *State) Error!?usize {
-        const name = try self.identifier() orelse return null;
-        if (self.peek() == null) {
-            return try self.append(.{ .state = .{ .bare = name } });
-        }
-
-        return try self.append(.{ .state = .{ .import = .{
-            .name = name,
-            .from = try self.token(.from) orelse try self.unexpected(),
-            .string = try self.string() orelse try self.missing(.string_open),
-        } } });
-    }
     fn transition(self: *State) Error!?usize {
         return try self.append(.{ .transition = .{
             .star = try self.token(.star),
@@ -431,14 +407,6 @@ pub const Iterator = struct {
         const node = self.nodes[self.stack.pop() orelse return null];
 
         switch (node) {
-            .root => |payload| {
-                try self.stack.append(gpa, payload.close);
-                try self.appendItems(gpa, payload.items.items, payload.seps.items);
-                try self.stack.append(gpa, payload.open);
-                if (payload.name) |name| {
-                    try self.stack.append(gpa, name);
-                }
-            },
             .bare => |payload| {
                 try self.stack.append(gpa, payload.string);
                 try self.stack.append(gpa, payload.name);
@@ -463,6 +431,12 @@ pub const Iterator = struct {
                         try self.stack.append(gpa, import.string);
                         try self.stack.append(gpa, import.from);
                         try self.stack.append(gpa, import.name);
+                    },
+                    .full => |full| {
+                        try self.stack.append(gpa, full.close);
+                        try self.appendItems(gpa, full.items.items, full.seps.items);
+                        try self.stack.append(gpa, full.open);
+                        try self.stack.append(gpa, full.name);
                     },
                 }
             },
