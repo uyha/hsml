@@ -61,10 +61,10 @@ const State = struct {
         switch (self.content.items[self.current]) {
             ':' => try self.appendToken(.colon),
             '*' => try self.appendToken(.star),
-            '{' => try self.appendToken(.brace_left),
-            '}' => try self.appendToken(.brace_right),
-            '(' => try self.appendToken(.paren_left),
-            ')' => try self.appendToken(.paren_right),
+            '{' => try self.appendToken(.brace_open),
+            '}' => try self.appendToken(.brace_close),
+            '(' => try self.appendToken(.paren_open),
+            ')' => try self.appendToken(.paren_close),
             ',' => try self.appendToken(.comma),
             '.' => try self.appendToken(.dot),
             '_' => {
@@ -284,10 +284,10 @@ test "Single character tokens" {
     try t.expectEqualDeep(&[_]Token{
         .{ .type = .colon, .pos = 0, .len = 1, .cursor = .{ .line = 0, .col = 0 } },
         .{ .type = .star, .pos = 1, .len = 1, .cursor = .{ .line = 0, .col = 1 } },
-        .{ .type = .brace_left, .pos = 2, .len = 1, .cursor = .{ .line = 0, .col = 2 } },
-        .{ .type = .brace_right, .pos = 3, .len = 1, .cursor = .{ .line = 0, .col = 3 } },
-        .{ .type = .paren_left, .pos = 4, .len = 1, .cursor = .{ .line = 0, .col = 4 } },
-        .{ .type = .paren_right, .pos = 5, .len = 1, .cursor = .{ .line = 0, .col = 5 } },
+        .{ .type = .brace_open, .pos = 2, .len = 1, .cursor = .{ .line = 0, .col = 2 } },
+        .{ .type = .brace_close, .pos = 3, .len = 1, .cursor = .{ .line = 0, .col = 3 } },
+        .{ .type = .paren_open, .pos = 4, .len = 1, .cursor = .{ .line = 0, .col = 4 } },
+        .{ .type = .paren_close, .pos = 5, .len = 1, .cursor = .{ .line = 0, .col = 5 } },
         .{ .type = .comma, .pos = 6, .len = 1, .cursor = .{ .line = 0, .col = 6 } },
         .{ .type = .dot, .pos = 7, .len = 1, .cursor = .{ .line = 0, .col = 7 } },
         .{ .type = .comma, .pos = 9, .len = 1, .cursor = .{ .line = 1, .col = 0 } },
@@ -354,12 +354,12 @@ test "Partial real" {
     try t.expectEqualDeep(&[_]Token{
         .{ .type = .identifier, .pos = 0, .len = 6, .cursor = .{ .line = 0, .col = 0 } },
         .{ .type = .colon, .pos = 6, .len = 1, .cursor = .{ .line = 0, .col = 6 } },
-        .{ .type = .brace_left, .pos = 8, .len = 1, .cursor = .{ .line = 0, .col = 8 } },
+        .{ .type = .brace_open, .pos = 8, .len = 1, .cursor = .{ .line = 0, .col = 8 } },
         .{ .type = .identifier, .pos = 10, .len = 9, .cursor = .{ .line = 1, .col = 0 } },
         .{ .type = .colon, .pos = 19, .len = 1, .cursor = .{ .line = 1, .col = 9 } },
-        .{ .type = .brace_left, .pos = 20, .len = 1, .cursor = .{ .line = 1, .col = 10 } },
-        .{ .type = .brace_right, .pos = 21, .len = 1, .cursor = .{ .line = 1, .col = 11 } },
-        .{ .type = .brace_right, .pos = 23, .len = 1, .cursor = .{ .line = 2, .col = 0 } },
+        .{ .type = .brace_open, .pos = 20, .len = 1, .cursor = .{ .line = 1, .col = 10 } },
+        .{ .type = .brace_close, .pos = 21, .len = 1, .cursor = .{ .line = 1, .col = 11 } },
+        .{ .type = .brace_close, .pos = 23, .len = 1, .cursor = .{ .line = 2, .col = 0 } },
         .{ .type = .eof, .pos = 24, .len = 0, .cursor = .{ .line = 2, .col = 1 } },
     }, scanner.tokens.items);
 }

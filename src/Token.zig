@@ -3,10 +3,10 @@ const Token = @This();
 pub const Type = enum {
     colon,
     star,
-    brace_left,
-    brace_right,
-    paren_left,
-    paren_right,
+    brace_open,
+    brace_close,
+    paren_open,
+    paren_close,
     comma,
     dot,
 

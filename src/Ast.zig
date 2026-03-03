@@ -22,7 +22,7 @@ pub fn parse(
         .content = content,
         .tokens = tokens,
     };
-    ast.root = try state.state() orelse try state.missing(.brace_left);
+    ast.root = try state.state() orelse try state.missing(.brace_open);
     ast.eof = try state.eof();
     return ast;
 }
@@ -59,14 +59,14 @@ pub const Node = union(enum) {
 
     when: Token,
     goto: Token,
-    brace_left: Token,
-    brace_right: Token,
+    brace_open: Token,
+    brace_close: Token,
     colon: Token,
     comma: Token,
     identifier: Token,
     call: Token,
-    paren_left: Token,
-    paren_right: Token,
+    paren_open: Token,
+    paren_close: Token,
     star: Token,
     underscore: Token,
     from: Token,
@@ -225,7 +225,7 @@ const State = struct {
         }
 
         const result = try self.many(
-            .{ .open = .brace_left, .close = .brace_right, .seperator = .comma },
+            .{ .open = .brace_open, .close = .brace_close, .seperator = .comma },
             component,
         );
 
@@ -241,8 +241,8 @@ const State = struct {
             .{ .tag = .transitions, .child = transition },
         };
         const config: ManyConfig = .{
-            .open = .brace_left,
-            .close = .brace_right,
+            .open = .brace_open,
+            .close = .brace_close,
             .seperator = .comma,
         };
         inline for (matches) |match| {
@@ -257,7 +257,7 @@ const State = struct {
             }
         }
 
-        return null;
+        return try self.unexpected();
     }
     const ManyConfig = struct {
         open: Token.Type,
@@ -325,7 +325,7 @@ const State = struct {
     fn transition(self: *State) Error!?usize {
         return try self.append(.{ .transition = .{
             .star = try self.token(.star),
-            .from = try self.transitionFrom() orelse try self.missing(.paren_left),
+            .from = try self.transitionFrom() orelse try self.missing(.paren_open),
             .guard = try self.transitionGuard(),
             .action = try self.transitionAction(),
             .to = try self.transitionTo(),
@@ -333,17 +333,17 @@ const State = struct {
     }
     fn transitionFrom(self: *State) Error!?usize {
         return try self.append(.{ .transition_from = .{
-            .open = try self.token(.paren_left) orelse return try self.unexpected(),
+            .open = try self.token(.paren_open) orelse return try self.unexpected(),
             .state = try self.token(.identifier) orelse try self.tokenOrMissing(.underscore),
             .comma = try self.tokenOrMissing(.comma),
             .event = try self.token(.identifier) orelse try self.tokenOrMissing(.underscore),
-            .close = try self.tokenOrMissing(.paren_right),
+            .close = try self.tokenOrMissing(.paren_close),
         } });
     }
     fn transitionGuard(self: *State) Error!?usize {
         const name = try self.token(.when) orelse return null;
         const content = try self.many(
-            .{ .open = .paren_left, .close = .paren_right, .seperator = .comma },
+            .{ .open = .paren_open, .close = .paren_close, .seperator = .comma },
             identifier,
         );
         return try self.append(.{ .transition_guard = content.of(name) });
@@ -351,7 +351,7 @@ const State = struct {
     fn transitionAction(self: *State) Error!?usize {
         const name = try self.token(.call) orelse return null;
         const content = try self.many(
-            .{ .open = .paren_left, .close = .paren_right, .seperator = .comma },
+            .{ .open = .paren_open, .close = .paren_close, .seperator = .comma },
             identifier,
         );
         return try self.append(.{ .transition_guard = content.of(name) });
@@ -382,7 +382,7 @@ const State = struct {
 
         const name = try self.identifier() orelse return null;
         const result = try self.many(
-            .{ .open = .brace_left, .close = .brace_right, .seperator = .comma },
+            .{ .open = .brace_open, .close = .brace_close, .seperator = .comma },
             bare,
         );
         return try self.append(.{ .map = .{ .lang = result.of(name) } });
