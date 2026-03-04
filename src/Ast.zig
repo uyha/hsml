@@ -15,7 +15,7 @@ pub fn parse(
     tokens: []const Token,
 ) Error!Ast {
     var ast: Ast = .{ .root = undefined, .eof = undefined, .nodes = .empty };
-    var state: State = .{
+    var state: Parser = .{
         .arena = arena,
 
         .nodes = &ast.nodes,
@@ -116,7 +116,7 @@ pub const Transition = struct {
     };
 };
 
-const State = struct {
+const Parser = struct {
     arena: Allocator,
 
     nodes: *std.ArrayList(Node),
@@ -125,33 +125,33 @@ const State = struct {
 
     current: usize = 0,
 
-    fn currentToken(self: *const State) Token {
+    fn currentToken(self: *const Parser) Token {
         assert(self.current < self.tokens.len);
         return self.tokens[self.current];
     }
-    fn peek(self: *const State) ?Token {
+    fn peek(self: *const Parser) ?Token {
         assert(self.current < self.tokens.len);
         if (self.current + 1 < self.tokens.len) {
             return self.tokens[self.current + 1];
         }
         return null;
     }
-    fn lexeme(self: *const State, source: Token) []const u8 {
+    fn lexeme(self: *const Parser, source: Token) []const u8 {
         assert(self.current < self.tokens.len);
         return source.lexeme(self.content);
     }
-    fn append(self: *State, value: Node) Error!usize {
+    fn append(self: *Parser, value: Node) Error!usize {
         try self.nodes.append(self.arena, value);
         return self.nodes.items.len - 1;
     }
-    fn unexpected(self: *State) Error!usize {
+    fn unexpected(self: *Parser) Error!usize {
         defer self.current += 1;
         return try self.append(.{ .unexpected = self.currentToken() });
     }
-    fn missing(self: *State, expected: Token.Type) Error!usize {
+    fn missing(self: *Parser, expected: Token.Type) Error!usize {
         return try self.append(.{ .missing = expected });
     }
-    fn named(self: *State, comptime expected: []const u8) Error!?usize {
+    fn named(self: *Parser, comptime expected: []const u8) Error!?usize {
         const current = self.currentToken();
         if (current.type == .eof) {
             return try self.append(@unionInit(Node, "missing", .identifier));
@@ -165,7 +165,7 @@ const State = struct {
         self.current += 1;
         return try self.append(.{ .identifier = current });
     }
-    fn token(self: *State, comptime expected: Token.Type) Error!?usize {
+    fn token(self: *Parser, comptime expected: Token.Type) Error!?usize {
         const current = self.currentToken();
         if (current.type == .eof) {
             return try self.append(@unionInit(Node, "missing", expected));
@@ -177,7 +177,7 @@ const State = struct {
         self.current += 1;
         return try self.append(@unionInit(Node, @tagName(expected), current));
     }
-    fn tokenTrailing(self: *State, comptime expected: Token.Type) Error!?usize {
+    fn tokenTrailing(self: *Parser, comptime expected: Token.Type) Error!?usize {
         const current = self.currentToken();
         if (current.type != expected) {
             return null;
@@ -186,16 +186,16 @@ const State = struct {
         self.current += 1;
         return try self.append(@unionInit(Node, @tagName(expected), current));
     }
-    fn tokenOrMissing(self: *State, comptime expected: Token.Type) Error!usize {
+    fn tokenOrMissing(self: *Parser, comptime expected: Token.Type) Error!usize {
         if (try self.token(expected)) |index| {
             return index;
         }
         return try self.missing(expected);
     }
-    fn identifier(self: *State) Error!?usize {
+    fn identifier(self: *Parser) Error!?usize {
         return try self.token(.identifier);
     }
-    fn string(self: *State) Error!?usize {
+    fn string(self: *Parser) Error!?usize {
         return try self.append(.{ .string = .{
             .open = try self.token(.string_open) orelse return null,
             .content = try self.tokenOrMissing(.string_content),
@@ -203,7 +203,7 @@ const State = struct {
         } });
     }
 
-    fn eof(self: *State) Error!usize {
+    fn eof(self: *Parser) Error!usize {
         const current = self.currentToken();
         if (current.type == .eof) {
             return try self.append(.{ .eof = current });
@@ -213,25 +213,29 @@ const State = struct {
         return try self.missing(.eof);
     }
 
-    fn state(self: *State) Error!?usize {
+    fn state(self: *Parser) Error!?usize {
         const name = try self.identifier() orelse return null;
+        const current = self.currentToken();
 
-        if (try self.token(.from)) |from| {
-            return try self.append(.{ .state = .{ .import = .{
-                .name = name,
-                .from = from,
-                .string = try self.string() orelse try self.missing(.string_open),
-            } } });
+        switch (current.type) {
+            .from => {
+                return try self.append(.{ .state = .{ .import = .{
+                    .name = name,
+                    .from = try self.token(.from) orelse unreachable,
+                    .string = try self.string() orelse try self.missing(.string_open),
+                } } });
+            },
+            .brace_open => {
+                const result = try self.many(
+                    .{ .open = .brace_open, .close = .brace_close, .seperator = .comma },
+                    component,
+                );
+                return try self.append(.{ .state = .{ .full = result.of(name) } });
+            },
+            else => return try self.append(.{ .state = .{ .bare = name } }),
         }
-
-        const result = try self.many(
-            .{ .open = .brace_open, .close = .brace_close, .seperator = .comma },
-            component,
-        );
-
-        return try self.append(.{ .state = .{ .full = result.of(name) } });
     }
-    fn component(self: *State) Error!?usize {
+    fn component(self: *Parser) Error!?usize {
         const matches = &.{
             .{ .tag = .resources, .child = map },
             .{ .tag = .states, .child = state },
@@ -282,9 +286,9 @@ const State = struct {
         }
     };
     fn many(
-        self: *State,
+        self: *Parser,
         comptime config: ManyConfig,
-        comptime child: fn (self: *State) Error!?usize,
+        comptime child: fn (self: *Parser) Error!?usize,
     ) Error!ManyResult {
         const open = try self.tokenOrMissing(config.open);
 
@@ -322,7 +326,7 @@ const State = struct {
         };
     }
 
-    fn transition(self: *State) Error!?usize {
+    fn transition(self: *Parser) Error!?usize {
         return try self.append(.{ .transition = .{
             .star = try self.token(.star),
             .from = try self.transitionFrom() orelse try self.missing(.paren_open),
@@ -331,7 +335,7 @@ const State = struct {
             .to = try self.transitionTo(),
         } });
     }
-    fn transitionFrom(self: *State) Error!?usize {
+    fn transitionFrom(self: *Parser) Error!?usize {
         return try self.append(.{ .transition_from = .{
             .open = try self.token(.paren_open) orelse return try self.unexpected(),
             .state = try self.token(.identifier) orelse try self.tokenOrMissing(.underscore),
@@ -340,7 +344,7 @@ const State = struct {
             .close = try self.tokenOrMissing(.paren_close),
         } });
     }
-    fn transitionGuard(self: *State) Error!?usize {
+    fn transitionGuard(self: *Parser) Error!?usize {
         const name = try self.token(.when) orelse return null;
         const content = try self.many(
             .{ .open = .paren_open, .close = .paren_close, .seperator = .comma },
@@ -348,7 +352,7 @@ const State = struct {
         );
         return try self.append(.{ .transition_guard = content.of(name) });
     }
-    fn transitionAction(self: *State) Error!?usize {
+    fn transitionAction(self: *Parser) Error!?usize {
         const name = try self.token(.call) orelse return null;
         const content = try self.many(
             .{ .open = .paren_open, .close = .paren_close, .seperator = .comma },
@@ -356,13 +360,13 @@ const State = struct {
         );
         return try self.append(.{ .transition_guard = content.of(name) });
     }
-    fn transitionTo(self: *State) Error!?usize {
+    fn transitionTo(self: *Parser) Error!?usize {
         return try self.append(.{ .transition_to = .{
             .goto = try self.token(.goto) orelse return null,
             .name = try self.tokenOrMissing(.identifier),
         } });
     }
-    fn bare(self: *State) Error!?usize {
+    fn bare(self: *Parser) Error!?usize {
         const current = self.currentToken();
         const next = self.peek() orelse return null;
 
@@ -375,7 +379,7 @@ const State = struct {
             .string = try self.string() orelse unreachable,
         } });
     }
-    fn map(self: *State) Error!?usize {
+    fn map(self: *Parser) Error!?usize {
         if (try self.bare()) |index| {
             return try self.append(.{ .map = .{ .bare = index } });
         }

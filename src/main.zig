@@ -84,9 +84,8 @@ fn parse(init: Init) !void {
         \\}
     );
     const scan_start = Clock.boot.now(init.io);
-    var scanner: Scanner = try .scan(arena, &reader);
+    const scanner: Scanner = try .scan(arena, &reader);
     const scan_end = Clock.boot.now(init.io);
-    defer scanner.deinit(arena);
 
     const parse_start = Clock.boot.now(init.io);
     const ast: Ast = try .parse(arena, scanner.content.items, scanner.tokens.items);
