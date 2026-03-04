@@ -66,7 +66,6 @@ const State = struct {
             '(' => try self.appendToken(.paren_open),
             ')' => try self.appendToken(.paren_close),
             ',' => try self.appendToken(.comma),
-            '.' => try self.appendToken(.dot),
             '_' => {
                 if (!try self.identifier()) {
                     try self.appendToken(.underscore);
@@ -289,7 +288,7 @@ test "Single character tokens" {
         .{ .type = .paren_open, .pos = 4, .len = 1, .cursor = .{ .line = 0, .col = 4 } },
         .{ .type = .paren_close, .pos = 5, .len = 1, .cursor = .{ .line = 0, .col = 5 } },
         .{ .type = .comma, .pos = 6, .len = 1, .cursor = .{ .line = 0, .col = 6 } },
-        .{ .type = .dot, .pos = 7, .len = 1, .cursor = .{ .line = 0, .col = 7 } },
+        .{ .type = .unexpected, .pos = 7, .len = 1, .cursor = .{ .line = 0, .col = 7 } },
         .{ .type = .comma, .pos = 9, .len = 1, .cursor = .{ .line = 1, .col = 0 } },
         .{ .type = .eof, .pos = 10, .len = 0, .cursor = .{ .line = 1, .col = 1 } },
     }, scanner.tokens.items);
