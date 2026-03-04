@@ -371,7 +371,7 @@ test "Lua string" {
         \\[=[aaa]=]
         \\[==[aaa]=]]==]
         \\[==[aaa]===]]==]
-        \\
+        \\[[
     );
     var scanner: Scanner = try .scan(gpa, &reader);
     defer scanner.deinit(gpa);
@@ -392,7 +392,9 @@ test "Lua string" {
         .{ .type = .string_open, .pos = 37, .len = 4, .cursor = .{ .line = 4, .col = 0 } },
         .{ .type = .string_content, .pos = 41, .len = 8, .cursor = .{ .line = 4, .col = 4 } },
         .{ .type = .string_close, .pos = 49, .len = 4, .cursor = .{ .line = 4, .col = 12 } },
-        .{ .type = .eof, .pos = 54, .len = 0, .cursor = .{ .line = 5, .col = 0 } },
+        .{ .type = .string_open, .pos = 54, .len = 2, .cursor = .{ .line = 5, .col = 0 } },
+        .{ .type = .string_content, .pos = 56, .len = 0, .cursor = .{ .line = 5, .col = 2 } },
+        .{ .type = .eof, .pos = 56, .len = 0, .cursor = .{ .line = 5, .col = 2 } },
     }, scanner.tokens.items);
 }
 test "underscore" {

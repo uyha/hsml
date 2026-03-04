@@ -198,7 +198,7 @@ const Parser = struct {
     fn string(self: *Parser) Error!?usize {
         return try self.append(.{ .string = .{
             .open = try self.token(.string_open) orelse return null,
-            .content = try self.tokenOrMissing(.string_content),
+            .content = try self.token(.string_content) orelse unreachable,
             .close = try self.tokenOrMissing(.string_close),
         } });
     }
