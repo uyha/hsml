@@ -6,7 +6,7 @@ fn openFile(io: Io, path: []const u8) Io.File.OpenError!Io.File {
 }
 
 pub fn main(init: Init) !void {
-    try parse(init);
+    try machine(init);
 }
 
 fn scanFile(init: Init) !void {
@@ -122,9 +122,38 @@ fn parse(init: Init) !void {
     std.debug.print("parsing took {}ns\n", .{parse_start.durationTo(parse_end).nanoseconds});
 }
 
+fn machine(init: Init) !void {
+    const arena = init.arena.allocator();
+    var reader: std.Io.Reader = .fixed(
+        \\simple {
+        \\
+        \\}
+    );
+    const scanner: Scanner = try .scan(arena, &reader);
+
+    const content = scanner.content.items;
+    const tokens = scanner.tokens.items;
+
+    const ast: Ast = try .parse(arena, content, tokens);
+
+    const nodes = ast.nodes.items;
+
+    const sm: Machine = .walk(arena, .{
+        .content = content,
+        .tokens = tokens,
+
+        .root = ast.root,
+        .eof = ast.eof,
+        .nodes = nodes,
+    });
+
+    std.debug.print("{}\n", .{sm});
+}
+
 const hsml = @import("hsml");
 const Scanner = hsml.Scanner;
 const Ast = hsml.Ast;
+const Machine = hsml.Machine;
 
 const std = @import("std");
 const Init = std.process.Init;

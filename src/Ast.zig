@@ -393,7 +393,7 @@ const Parser = struct {
     }
 };
 
-pub const Iterator = struct {
+const Iterator = struct {
     stack: std.ArrayList(usize) = .empty,
     nodes: []const Node,
 
