@@ -9,7 +9,7 @@ pub fn iterator(self: *const Ast, gpa: Allocator) Allocator.Error!Iterator {
     return try .init(gpa, &.{ self.eof, self.root }, self.nodes.items);
 }
 
-pub fn parse(
+pub fn init(
     arena: std.mem.Allocator,
     content: []const u8,
     tokens: []const Token,
@@ -28,20 +28,10 @@ pub fn parse(
 }
 
 pub const Node = union(enum) {
-    state: union(enum) {
-        bare: usize,
-        import: struct { name: usize, from: usize, string: usize },
-        full: Many,
-    },
+    state: State,
 
-    bare: struct {
-        name: usize,
-        string: usize,
-    },
-    map: union(enum) {
-        bare: usize,
-        lang: Many,
-    },
+    bare: Bare,
+    map: Map,
 
     states: Many,
 
@@ -84,6 +74,20 @@ pub const Node = union(enum) {
     missing: Token.Type,
 
     eof: Token,
+};
+
+pub const State = union(enum) {
+    bare: usize,
+    import: struct { name: usize, from: usize, string: usize },
+    full: Many,
+};
+pub const Bare = struct {
+    name: usize,
+    string: usize,
+};
+pub const Map = union(enum) {
+    bare: usize,
+    lang: Many,
 };
 
 pub const Many = struct {
@@ -393,11 +397,15 @@ const Parser = struct {
     }
 };
 
-const Iterator = struct {
+pub const Iterator = struct {
     stack: std.ArrayList(usize) = .empty,
     nodes: []const Node,
 
-    pub fn init(gpa: Allocator, initial: []const usize, nodes: []const Node) Allocator.Error!Iterator {
+    pub fn init(
+        gpa: Allocator,
+        initial: []const usize,
+        nodes: []const Node,
+    ) Allocator.Error!Iterator {
         var result: Iterator = .{ .nodes = nodes };
 
         for (initial) |item| {
@@ -405,6 +413,13 @@ const Iterator = struct {
         }
 
         return result;
+    }
+    pub fn deinit(self: *Iterator, gpa: Allocator) void {
+        self.stack.deinit(gpa);
+    }
+
+    pub fn peek(self: *const Iterator) ?Node {
+        return self.nodes[self.stack.getLastOrNull() orelse return null];
     }
 
     pub fn next(self: *Iterator, gpa: Allocator) Allocator.Error!?Node {
@@ -578,7 +593,7 @@ test {
         \\  },
         \\}
     );
-    var scanner: Scanner = try .scan(arena, &reader);
+    var scanner: Scanner = try .init(arena, &reader);
     defer scanner.deinit(arena);
 
     const ast: Ast = try .parse(

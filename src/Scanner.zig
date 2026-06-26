@@ -10,7 +10,7 @@ pub fn deinit(self: *Scanner, gpa: Allocator) void {
     self.tokens.deinit(gpa);
 }
 
-pub fn scan(gpa: Allocator, reader: *Io.Reader) Error!Scanner {
+pub fn init(gpa: Allocator, reader: *Io.Reader) Error!Scanner {
     var scanner: Scanner = .{};
     try State.scan(gpa, reader, &scanner.content, &scanner.tokens);
     return scanner;
@@ -277,7 +277,7 @@ test "Single character tokens" {
         \\:*{}(),.
         \\,
     );
-    var scanner: Scanner = try .scan(gpa, &reader);
+    var scanner: Scanner = try .init(gpa, &reader);
     defer scanner.deinit(gpa);
 
     try t.expectEqualDeep(&[_]Token{
@@ -303,7 +303,7 @@ test "Multi character tokens" {
         \\ when call
         \\   self from
     );
-    var scanner: Scanner = try .scan(gpa, &reader);
+    var scanner: Scanner = try .init(gpa, &reader);
     defer scanner.deinit(gpa);
 
     try t.expectEqualDeep(&[_]Token{
@@ -328,7 +328,7 @@ test "Single identifier" {
     var reader: std.Io.Reader = .fixed(
         \\simple:
     );
-    var scanner: Scanner = try .scan(gpa, &reader);
+    var scanner: Scanner = try .init(gpa, &reader);
     defer scanner.deinit(gpa);
 
     try t.expectEqualDeep(&[_]Token{
@@ -347,7 +347,7 @@ test "Partial real" {
         \\res0urc3s:{}
         \\}
     );
-    var scanner: Scanner = try .scan(gpa, &reader);
+    var scanner: Scanner = try .init(gpa, &reader);
     defer scanner.deinit(gpa);
 
     try t.expectEqualDeep(&[_]Token{
@@ -373,7 +373,7 @@ test "Lua string" {
         \\[==[aaa]===]]==]
         \\[[
     );
-    var scanner: Scanner = try .scan(gpa, &reader);
+    var scanner: Scanner = try .init(gpa, &reader);
     defer scanner.deinit(gpa);
 
     try t.expectEqualDeep(&[_]Token{
@@ -403,7 +403,7 @@ test "underscore" {
     var reader: std.Io.Reader = .fixed(
         \\_ _a __ _a_
     );
-    var scanner: Scanner = try .scan(gpa, &reader);
+    var scanner: Scanner = try .init(gpa, &reader);
     defer scanner.deinit(gpa);
 
     try t.expectEqualDeep(&[_]Token{
@@ -420,7 +420,7 @@ test "unexpected" {
     var reader: std.Io.Reader = .fixed(
         \\1
     );
-    var scanner: Scanner = try .scan(gpa, &reader);
+    var scanner: Scanner = try .init(gpa, &reader);
     defer scanner.deinit(gpa);
 
     try t.expectEqualDeep(&[_]Token{

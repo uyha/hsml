@@ -27,7 +27,7 @@ fn scanFile(init: Init) !void {
     var freader = file.readerStreaming(io, &buffer);
     const reader = &freader.interface;
 
-    const scanner: Scanner = try .scan(arena, reader);
+    const scanner: Scanner = try .init(arena, reader);
 
     for (scanner.tokens.items) |token| {
         std.debug.print("{} \"{s}\"\n", .{ token, token.lexeme(scanner.content.items) });
@@ -84,11 +84,11 @@ fn parse(init: Init) !void {
         \\}
     );
     const scan_start = Clock.boot.now(init.io);
-    const scanner: Scanner = try .scan(arena, &reader);
+    const scanner: Scanner = try .init(arena, &reader);
     const scan_end = Clock.boot.now(init.io);
 
     const parse_start = Clock.boot.now(init.io);
-    const ast: Ast = try .parse(arena, scanner.content.items, scanner.tokens.items);
+    const ast: Ast = try .init(arena, scanner.content.items, scanner.tokens.items);
     const parse_end = Clock.boot.now(init.io);
     std.debug.print("root: {}\n", .{ast.root});
 
@@ -118,27 +118,35 @@ fn parse(init: Init) !void {
         }
     }
 
-    std.debug.print("scanning took {}ns\n", .{scan_start.durationTo(scan_end).nanoseconds});
-    std.debug.print("parsing took {}ns\n", .{parse_start.durationTo(parse_end).nanoseconds});
+    std.debug.print("scanning took {f}\n", .{scan_start.durationTo(scan_end)});
+    std.debug.print("parsing took {f}\n", .{parse_start.durationTo(parse_end)});
 }
 
 fn machine(init: Init) !void {
     const arena = init.arena.allocator();
     var reader: std.Io.Reader = .fixed(
         \\simple {
-        \\
+        \\  events {red [[Red]], yellow [[Yellow]], green [[Green]], speed {
+        \\      zig [[Speed]], cpp [[Speed]]
+        \\    }
+        \\  },
+        // \\  states {
+        // \\    running from [[running.hsml]],
+        // \\    pausing,
+        // \\    accelerating,
+        // \\  },
         \\}
     );
-    const scanner: Scanner = try .scan(arena, &reader);
+    const scanner: Scanner = try .init(arena, &reader);
 
     const content = scanner.content.items;
     const tokens = scanner.tokens.items;
 
-    const ast: Ast = try .parse(arena, content, tokens);
+    const ast: Ast = try .init(arena, content, tokens);
 
     const nodes = ast.nodes.items;
 
-    const sm: Machine = .walk(arena, .{
+    const sm: Machine = try .init(arena, .{
         .content = content,
         .tokens = tokens,
 
@@ -147,7 +155,13 @@ fn machine(init: Init) !void {
         .nodes = nodes,
     });
 
-    std.debug.print("{}\n", .{sm});
+    for (sm.states.items) |state| {
+        switch (state.definition) {
+            .bare => std.debug.print("{s} bare\n", .{state.name}),
+            .import => |value| std.debug.print("{s} import from {s}\n", .{ state.name, value }),
+            else => {},
+        }
+    }
 }
 
 const hsml = @import("hsml");
